@@ -1,0 +1,34 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|MultiEdit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [[ '{tool_input.file_path}' == */backend/app/*.py ]]; then cd backend && ruff format '{tool_input.file_path}' && ruff check '{tool_input.file_path}' --output-format=concise; fi"
+          },
+          {
+            "type": "command",
+            "command": "if [[ '{tool_input.file_path}' == */frontend/src/*.ts* ]] || [[ '{tool_input.file_path}' == */frontend/tests/*.ts* ]]; then cd frontend && npx @biomejs/biome format --write '{tool_input.file_path}' && npx @biomejs/biome lint '{tool_input.file_path}'; fi"
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "paplay bell.oga"
+          },
+          {
+            "type": "command",
+            "command": "notify-send 'Claude Code' 'Awaiting your input'"
+          }
+        ]
+      }
+    ]
+  }
+}
