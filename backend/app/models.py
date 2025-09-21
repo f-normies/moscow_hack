@@ -1,8 +1,11 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, date, time
+from decimal import Decimal
+from typing import Dict, Any
 
 from pydantic import EmailStr
-from sqlmodel import Field, Relationship, SQLModel
+from sqlalchemy import JSON
+from sqlmodel import Field, Relationship, SQLModel, Column
 
 
 # Shared properties
@@ -46,6 +49,9 @@ class User(UserBase, table=True):
     hashed_password: str
     items: list["Item"] = Relationship(back_populates="owner", cascade_delete=True)
     files: list["FileMetadata"] = Relationship(
+        back_populates="owner", cascade_delete=True
+    )
+    dicom_studies: list["DICOMStudy"] = Relationship(
         back_populates="owner", cascade_delete=True
     )
 
@@ -160,3 +166,113 @@ class FileMetadataWithUrl(FileMetadataPublic):
 class FilesPublic(SQLModel):
     data: list[FileMetadataPublic]
     count: int
+
+
+# DICOM Study Models
+class DICOMStudyBase(SQLModel):
+    study_instance_uid: str = Field(max_length=255, unique=True)
+    study_date: date | None = None
+    study_time: time | None = None
+    study_description: str | None = Field(default=None)
+    patient_id: str | None = Field(default=None, max_length=255)
+    modality: str | None = Field(default=None, max_length=50)
+    institution_name: str | None = Field(default=None, max_length=255)
+
+
+class DICOMStudyCreate(DICOMStudyBase):
+    pass
+
+
+class DICOMStudy(DICOMStudyBase, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    owner_id: uuid.UUID = Field(
+        foreign_key="user.id", nullable=False, ondelete="CASCADE"
+    )
+    file_count: int = Field(default=0)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime | None = None
+
+    # Relationships
+    owner: User | None = Relationship(back_populates="dicom_studies")
+    series: list["DICOMSeries"] = Relationship(
+        back_populates="study", cascade_delete=True
+    )
+
+
+class DICOMStudyPublic(DICOMStudyBase):
+    id: uuid.UUID
+    file_count: int
+    created_at: datetime
+    series: list["DICOMSeriesPublic"] = []
+
+
+# DICOM Series Models
+class DICOMSeriesBase(SQLModel):
+    series_instance_uid: str = Field(max_length=255, unique=True)
+    series_number: int | None = None
+    series_description: str | None = None
+    modality: str | None = Field(default=None, max_length=50)
+    body_part_examined: str | None = Field(default=None, max_length=100)
+
+
+class DICOMSeriesCreate(DICOMSeriesBase):
+    study_id: uuid.UUID
+
+
+class DICOMSeries(DICOMSeriesBase, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    study_id: uuid.UUID = Field(
+        foreign_key="dicomstudy.id", nullable=False, ondelete="CASCADE"
+    )
+    image_count: int = Field(default=0)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    # Relationships
+    study: DICOMStudy | None = Relationship(back_populates="series")
+    dicom_metadata: list["DICOMMetadata"] = Relationship(
+        back_populates="series", cascade_delete=True
+    )
+
+
+class DICOMSeriesPublic(DICOMSeriesBase):
+    id: uuid.UUID
+    image_count: int
+    created_at: datetime
+
+
+# DICOM Metadata Models
+class DICOMMetadataBase(SQLModel):
+    instance_number: int | None = None
+    rows: int | None = None
+    columns: int | None = None
+    pixel_spacing: str | None = Field(default=None, max_length=100)
+    slice_thickness: Decimal | None = None
+    window_center: Decimal | None = None
+    window_width: Decimal | None = None
+    extracted_metadata: Dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
+
+
+class DICOMMetadataCreate(DICOMMetadataBase):
+    file_id: uuid.UUID
+    series_id: uuid.UUID
+
+
+class DICOMMetadata(DICOMMetadataBase, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    file_id: uuid.UUID = Field(
+        foreign_key="filemetadata.id", nullable=False, ondelete="CASCADE"
+    )
+    series_id: uuid.UUID = Field(
+        foreign_key="dicomseries.id", nullable=False, ondelete="CASCADE"
+    )
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    # Relationships
+    file: FileMetadata | None = Relationship()
+    series: DICOMSeries | None = Relationship(back_populates="dicom_metadata")
+
+
+class DICOMMetadataPublic(DICOMMetadataBase):
+    id: uuid.UUID
+    file_id: uuid.UUID
+    created_at: datetime
