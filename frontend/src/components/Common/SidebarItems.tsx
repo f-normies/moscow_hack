@@ -7,6 +7,7 @@ import {
   FiHome,
   FiSettings,
   FiUsers,
+  FiActivity,
 } from "react-icons/fi"
 import type { IconType } from "react-icons/lib"
 
@@ -16,6 +17,7 @@ const items = [
   { icon: FiHome, title: "Dashboard", path: "/" },
   { icon: FiBriefcase, title: "Items", path: "/items" },
   { icon: FiFile, title: "Files", path: "/files" },
+  { icon: FiActivity, title: "DICOM Studies", path: "/dicom" },
   { icon: FiSettings, title: "User Settings", path: "/settings" },
 ]
 
