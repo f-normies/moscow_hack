@@ -48,6 +48,25 @@ Note: Correctly proxying MinIO to localhost was a MASSIVE pain in the ass. Just 
 
 6. Read [backend/README.md](./backend/README.md) and [frontend/README.md](./frontend/README.md) for development guidelines!
 
+Use these credentials to check services:
+
+```
+Backend Admin Login
+  - Email: admin@webapp.com
+  - Password: GYSgmXnhFR3p7-4x-2D21A
+
+MinIO Storage Credentials
+
+  Root Admin Access (Console)
+  - Username: minio
+  - Password: KaAsm5IXs--CrKeEFILGkA
+
+  Application Service Access
+  - Access Key: app-service-minio
+  - Secret Key: 9f0jReES1fs8Bj_XoF7ViPAKB1k
+
+```
+
 ## Technology Stack and Features
 
 - ⚡ [**FastAPI**](https://fastapi.tiangolo.com) for the Python backend API.
