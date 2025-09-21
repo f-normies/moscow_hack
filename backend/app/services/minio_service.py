@@ -248,6 +248,19 @@ class MinIOService:
 
         logger.info(f"\tFile deleted successfully: {file_metadata.minio_path}")
 
+    @handle_minio_errors
+    async def delete_file_from_storage(self, minio_path: str) -> None:
+        """Delete file from MinIO storage only (without database operations)"""
+
+        # Delete from MinIO
+        def _delete():
+            return self.client.remove_object(
+                bucket_name=self.bucket_name, object_name=minio_path
+            )
+
+        await asyncio.to_thread(_delete)
+        logger.info(f"\tFile deleted from storage: {minio_path}")
+
     async def list_user_files(
         self, user_id: uuid.UUID, session: Session, skip: int = 0, limit: int = 100
     ) -> list[FileMetadata]:

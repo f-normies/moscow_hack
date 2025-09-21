@@ -9,6 +9,7 @@ from decimal import Decimal
 
 import pydicom
 from pydicom.dataset import Dataset
+from pydicom.multival import MultiValue
 from sqlmodel import Session, select
 
 from app.core.config import settings
@@ -28,6 +29,28 @@ class DICOMProcessingService:
     def __init__(self):
         self.max_zip_size = 1 * 1024 * 1024 * 1024  # 1GB
         self.max_individual_file_size = 100 * 1024 * 1024  # 100MB
+
+    def _serialize_dicom_value(self, value: Any) -> Any:
+        """Convert DICOM values to JSON-serializable formats"""
+        if value is None:
+            return None
+
+        # Handle MultiValue objects (convert to list)
+        if isinstance(value, MultiValue):
+            return list(value)
+
+        # Handle bytes (convert to string representation)
+        if isinstance(value, bytes):
+            try:
+                return value.decode('utf-8', errors='ignore')
+            except:
+                return str(value)
+
+        # Handle other complex types by converting to string
+        if hasattr(value, '__str__') and not isinstance(value, (str, int, float, bool)):
+            return str(value)
+
+        return value
 
     async def process_dicom_zip(
         self,
@@ -210,7 +233,7 @@ class DICOMProcessingService:
         # Clean filename for storage
         safe_filename = f"{instance_uid}.dcm"
 
-        # Upload to MinIO with organized path structure
+        # Upload to MinIO
         file_metadata = await minio_service.upload_file(
             file_data=file_data,
             filename=safe_filename,
@@ -218,9 +241,7 @@ class DICOMProcessingService:
             session=session
         )
 
-        # Update MinIO path to organized structure
-        organized_path = f"dicom/{study_id}/{series.id}/{safe_filename}"
-        file_metadata.minio_path = organized_path
+        # Update content type for DICOM files
         file_metadata.content_type = "application/dicom"
         session.add(file_metadata)
 
@@ -340,16 +361,16 @@ class DICOMProcessingService:
 
         # Full metadata as JSON (selected fields only)
         extracted_metadata = {
-            'SOPInstanceUID': getattr(ds, 'SOPInstanceUID', None),
-            'SOPClassUID': getattr(ds, 'SOPClassUID', None),
-            'Modality': getattr(ds, 'Modality', None),
-            'StudyDescription': getattr(ds, 'StudyDescription', None),
-            'SeriesDescription': getattr(ds, 'SeriesDescription', None),
-            'BodyPartExamined': getattr(ds, 'BodyPartExamined', None),
-            'PatientPosition': getattr(ds, 'PatientPosition', None),
-            'ImageType': getattr(ds, 'ImageType', None),
-            'AcquisitionDate': getattr(ds, 'AcquisitionDate', None),
-            'AcquisitionTime': getattr(ds, 'AcquisitionTime', None),
+            'SOPInstanceUID': self._serialize_dicom_value(getattr(ds, 'SOPInstanceUID', None)),
+            'SOPClassUID': self._serialize_dicom_value(getattr(ds, 'SOPClassUID', None)),
+            'Modality': self._serialize_dicom_value(getattr(ds, 'Modality', None)),
+            'StudyDescription': self._serialize_dicom_value(getattr(ds, 'StudyDescription', None)),
+            'SeriesDescription': self._serialize_dicom_value(getattr(ds, 'SeriesDescription', None)),
+            'BodyPartExamined': self._serialize_dicom_value(getattr(ds, 'BodyPartExamined', None)),
+            'PatientPosition': self._serialize_dicom_value(getattr(ds, 'PatientPosition', None)),
+            'ImageType': self._serialize_dicom_value(getattr(ds, 'ImageType', None)),
+            'AcquisitionDate': self._serialize_dicom_value(getattr(ds, 'AcquisitionDate', None)),
+            'AcquisitionTime': self._serialize_dicom_value(getattr(ds, 'AcquisitionTime', None)),
         }
 
         return DICOMMetadata(
@@ -423,10 +444,40 @@ class DICOMProcessingService:
         if not study:
             raise ValueError("Study not found")
 
-        # Delete study (cascade will handle related records)
+        # Get all FileMetadata records associated with this study through DICOMMetadata
+        file_records = session.exec(
+            select(FileMetadata)
+            .join(DICOMMetadata, FileMetadata.id == DICOMMetadata.file_id)
+            .join(DICOMSeries, DICOMMetadata.series_id == DICOMSeries.id)
+            .where(DICOMSeries.study_id == study_id)
+        ).all()
+
+        # Delete files from MinIO first
+        deleted_files_count = 0
+        for file_record in file_records:
+            try:
+                await minio_service.delete_file_from_storage(file_record.minio_path)
+                deleted_files_count += 1
+                logger.debug(f"Deleted file from MinIO: {file_record.minio_path}")
+            except Exception as e:
+                logger.warning(f"Failed to delete file {file_record.minio_path} from MinIO: {e}")
+                # Continue with deletion even if some files fail to delete from MinIO
+
+        # Delete study (cascade will handle DICOMSeries and DICOMMetadata records)
         session.delete(study)
         session.commit()
-        logger.info(f"Deleted DICOM study: {study_id}")
+
+        # Delete FileMetadata records after DICOM records are deleted
+        for file_record in file_records:
+            try:
+                session.delete(file_record)
+                logger.debug(f"Deleted FileMetadata record: {file_record.id}")
+            except Exception as e:
+                logger.warning(f"Failed to delete FileMetadata record {file_record.id}: {e}")
+
+        session.commit()
+
+        logger.info(f"Deleted DICOM study: {study_id} with {deleted_files_count} files")
 
 
 # Global service instance
