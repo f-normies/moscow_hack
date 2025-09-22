@@ -6,6 +6,7 @@ interface ThreadsProps {
   amplitude?: number;
   distance?: number;
   enableMouseInteraction?: boolean;
+  blur?: number;
 }
 
 const vertexShader = `
@@ -27,12 +28,12 @@ uniform vec3 uColor;
 uniform float uAmplitude;
 uniform float uDistance;
 uniform vec2 uMouse;
+uniform float uBlur;
 
 #define PI 3.1415926538
 
 const int u_line_count = 40;
 const float u_line_width = 7.0;
-const float u_line_blur = 10.0;
 
 float Perlin2D(vec2 P) {
     vec2 Pi = floor(P);
@@ -80,14 +81,14 @@ float lineFn(vec2 st, float width, float perc, float offset, vec2 mouse, float t
     float y = 0.5 + (perc - 0.5) * distance + xnoise / 2.0 * finalAmplitude;
 
     float line_start = smoothstep(
-        y + (width / 2.0) + (u_line_blur * pixel(1.0, iResolution.xy) * blur),
+        y + (width / 2.0) + (uBlur * pixel(1.0, iResolution.xy) * blur),
         y,
         st.y
     );
 
     float line_end = smoothstep(
         y,
-        y - (width / 2.0) - (u_line_blur * pixel(1.0, iResolution.xy) * blur),
+        y - (width / 2.0) - (uBlur * pixel(1.0, iResolution.xy) * blur),
         st.y
     );
 
@@ -130,6 +131,7 @@ const Threads: React.FC<ThreadsProps> = ({
   amplitude = 1,
   distance = 0,
   enableMouseInteraction = false,
+  blur = 10.0,
   ...rest
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -158,7 +160,8 @@ const Threads: React.FC<ThreadsProps> = ({
         uColor: { value: new Color(...color) },
         uAmplitude: { value: amplitude },
         uDistance: { value: distance },
-        uMouse: { value: new Float32Array([0.5, 0.5]) }
+        uMouse: { value: new Float32Array([0.5, 0.5]) },
+        uBlur: { value: blur }
       }
     });
 
@@ -220,7 +223,7 @@ const Threads: React.FC<ThreadsProps> = ({
       if (container.contains(gl.canvas)) container.removeChild(gl.canvas);
       gl.getExtension('WEBGL_lose_context')?.loseContext();
     };
-  }, [color, amplitude, distance, enableMouseInteraction]);
+  }, [color, amplitude, distance, enableMouseInteraction, blur]);
 
   return <div ref={containerRef} className="w-full h-full relative" {...rest} />;
 };
