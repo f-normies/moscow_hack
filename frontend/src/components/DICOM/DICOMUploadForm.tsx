@@ -121,14 +121,6 @@ export function DICOMUploadForm({ onUploadComplete }: DICOMUploadFormProps) {
 
   return (
     <VStack gap={6} align="stretch" w="full" maxW="600px">
-      <Box>
-        <Text fontSize="xl" fontWeight="bold" mb={2}>
-          Upload DICOM Study
-        </Text>
-        <Text fontSize="sm" color="gray.600">
-          Upload a ZIP archive containing DICOM medical imaging files (.dcm files)
-        </Text>
-      </Box>
 
       <Field.Root>
         <Field.Label>DICOM ZIP Archive</Field.Label>

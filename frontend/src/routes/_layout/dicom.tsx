@@ -6,7 +6,7 @@ import {
   VStack,
   HStack,
   Text,
-  Divider,
+  Separator,
   Alert,
   Button,
 } from '@chakra-ui/react'
@@ -179,7 +179,7 @@ function CTStudiesPage() {
             <DICOMUploadForm onUploadComplete={handleUploadComplete} />
           </Box>
 
-          <Divider />
+          <Separator />
 
           {/* Studies List Section */}
           <Box>

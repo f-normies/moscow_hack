@@ -1,4 +1,4 @@
-import { Box, Container, Image, Input, Text } from "@chakra-ui/react"
+import { Box, Container, Image, Input, Text, VStack, HStack, Separator } from "@chakra-ui/react"
 import {
   Link as RouterLink,
   createFileRoute,
@@ -74,55 +74,87 @@ function Login() {
         />
       </Box>
 
-      {/* Login Form Overlay */}
+      {/* Main Content Container */}
       <Container
-        as="form"
-        onSubmit={handleSubmit(onSubmit)}
         position="relative"
         zIndex={1}
         h="100vh"
-        maxW="sm"
-        alignItems="stretch"
+        maxW="4xl"
+        display="flex"
+        alignItems="center"
         justifyContent="center"
-        gap={4}
-        centerContent
-        bg="bg/80"
-        backdropFilter="blur(10px)"
-        borderRadius="lg"
-        p={8}
-        mx="auto"
-        my={8}
+        gap={8}
+        px={8}
       >
-        <Image
-          src={Logo}
-          alt="FastAPI logo"
-          height="auto"
-          maxW="2xs"
-          alignSelf="center"
-          mb={4}
-        />
-        <Field
-          invalid={!!errors.username}
-          errorText={errors.username?.message || !!error}
+        {/* User History Cards */}
+        {showHistory && (
+          <VStack gap={4} align="stretch" flex="0 0 auto">
+            <Text
+              fontSize="lg"
+              fontWeight="semibold"
+              color="fg"
+              textAlign="center"
+            >
+              Welcome back
+            </Text>
+            <VStack gap={3}>
+              {userHistory.map((user) => (
+                <UserHistoryCard
+                  key={user.email}
+                  user={user}
+                  onSelect={handleUserHistorySelect}
+                  onRemove={handleRemoveUser}
+                />
+              ))}
+            </VStack>
+            <Separator orientation="vertical" h="200px" mx={4} />
+          </VStack>
+        )}
+
+        {/* Login Form */}
+        <Box
+          as="form"
+          onSubmit={handleSubmit(onSubmit)}
+          flex="0 0 auto"
+          w="full"
+          maxW="sm"
+          bg="bg/80"
+          backdropFilter="blur(10px)"
+          borderRadius="lg"
+          p={8}
+          boxShadow="lg"
         >
-          <InputGroup w="100%" startElement={<FiMail />}>
-            <Input
-              id="username"
-              {...register("username", {
-                required: "Username is required",
-                pattern: emailPattern,
-              })}
-              placeholder="Email"
-              type="email"
+          <VStack gap={4} align="stretch">
+            <Image
+              src={Logo}
+              alt="FastAPI logo"
+              height="auto"
+              maxW="2xs"
+              alignSelf="center"
+              mb={4}
             />
-          </InputGroup>
-        </Field>
-        <PasswordInput
-          type="password"
-          startElement={<FiLock />}
-          {...register("password", passwordRules())}
-          placeholder="Password"
-          errors={errors}
+            <Field
+              invalid={!!errors.username}
+              errorText={errors.username?.message || !!error}
+            >
+              <InputGroup w="100%" startElement={<FiMail />}>
+                <Input
+                  id="username"
+                  {...register("username", {
+                    required: "Username is required",
+                    pattern: emailPattern,
+                  })}
+                  placeholder="Email"
+                  type="email"
+                />
+              </InputGroup>
+            </Field>
+            <PasswordInput
+              type="password"
+              startElement={<FiLock />}
+              {...register("password", passwordRules())}
+              placeholder="Password"
+              errors={errors}
             />
             <RouterLink to="/recover-password" className="main-link">
               Forgot Password?
