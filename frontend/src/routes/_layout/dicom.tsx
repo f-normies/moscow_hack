@@ -185,9 +185,6 @@ function CTStudiesPage() {
 
           {/* Studies List Section */}
           <Box>
-            <Text fontSize="lg" fontWeight="semibold" mb={4}>
-              CT Studies
-            </Text>
             <DICOMStudyList onStudySelect={handleStudySelect} />
           </Box>
         </VStack>
