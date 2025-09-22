@@ -4,6 +4,7 @@ interface UserHistory {
   lastLogin: string;
   jobTitle?: string;
   avatar?: string;
+  accessToken?: string;
 }
 
 const USER_HISTORY_KEY = 'user_history';
@@ -13,7 +14,7 @@ export class UserHistoryService {
   /**
    * Save user login to history
    */
-  static saveUserLogin(user: { email: string; full_name?: string }): void {
+  static saveUserLogin(user: { email: string; full_name?: string }, accessToken?: string): void {
     try {
       const history = this.getUserHistory();
       const newEntry: UserHistory = {
@@ -21,6 +22,7 @@ export class UserHistoryService {
         fullName: user.full_name || user.email.split('@')[0],
         lastLogin: new Date().toISOString(),
         jobTitle: 'Medical Professional', // Default placeholder
+        accessToken: accessToken,
       };
 
       // Remove existing entry for this user
@@ -92,6 +94,32 @@ export class UserHistoryService {
       return date.toLocaleDateString();
     } catch (error) {
       return 'Recently';
+    }
+  }
+
+  /**
+   * Check if user has valid stored token
+   */
+  static hasValidToken(email: string): boolean {
+    try {
+      const history = this.getUserHistory();
+      const user = history.find(item => item.email === email);
+      return !!(user?.accessToken);
+    } catch (error) {
+      return false;
+    }
+  }
+
+  /**
+   * Get stored token for user
+   */
+  static getStoredToken(email: string): string | null {
+    try {
+      const history = this.getUserHistory();
+      const user = history.find(item => item.email === email);
+      return user?.accessToken || null;
+    } catch (error) {
+      return null;
     }
   }
 }

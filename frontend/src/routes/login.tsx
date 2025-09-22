@@ -1,4 +1,4 @@
-import { Box, Container, Image, Input, Text, VStack, HStack, Separator } from "@chakra-ui/react"
+import { Box, Image, Input, Text, VStack, Separator } from "@chakra-ui/react"
 import {
   Link as RouterLink,
   createFileRoute,
@@ -32,7 +32,7 @@ export const Route = createFileRoute("/login")({
 })
 
 function Login() {
-  const { loginMutation, error, resetError } = useAuth()
+  const { loginMutation, autoLogin, error, resetError } = useAuth()
   const [userHistory, setUserHistory] = useState<UserHistory[]>([])
   const [showHistory, setShowHistory] = useState(false)
 
@@ -63,19 +63,35 @@ function Login() {
     resetError()
 
     try {
-      const result = await loginMutation.mutateAsync(data)
-      // Save successful login to history
-      if (result) {
-        UserHistoryService.saveUserLogin({ email: data.username })
-      }
+      await loginMutation.mutateAsync(data)
+      // User history is now saved automatically in the useAuth hook
     } catch {
       // error is handled by useAuth hook
     }
   }
 
-  const handleUserHistorySelect = (user: UserHistory) => {
-    setValue("username", user.email)
-    setShowHistory(false)
+  const handleUserHistorySelect = async (user: UserHistory) => {
+    if (isSubmitting) return
+
+    resetError()
+
+    try {
+      // Attempt automatic login with stored token
+      await autoLogin(user.email)
+    } catch (error) {
+      console.warn("Auto login failed, falling back to manual login:", error)
+
+      // If auto login fails, fill form and focus password field
+      setValue("username", user.email)
+      setShowHistory(false)
+
+      setTimeout(() => {
+        const passwordField = document.getElementById("password") as HTMLInputElement
+        if (passwordField) {
+          passwordField.focus()
+        }
+      }, 150)
+    }
   }
 
   const handleRemoveUser = (email: string) => {
@@ -86,42 +102,51 @@ function Login() {
   }
 
   return (
-    <Box position="relative" h="100vh" overflow="hidden">
-      {/* Animated Background */}
+    <Box position="relative" w="100vw" h="100vh" overflow="hidden">
+      {/* Threads Background - Full Screen */}
       <Box
-        position="absolute"
+        position="fixed"
         top={0}
         left={0}
-        right={0}
-        bottom={0}
+        w="100vw"
+        h="100vh"
         zIndex={0}
       >
         <Threads
           color={[0, 0.588, 0.533]} // #009688 in RGB normalized (0/255, 150/255, 136/255)
-          amplitude={0.6}
-          distance={0.2}
+          amplitude={1.3}
+          distance={1.4}
           enableMouseInteraction={true}
+          style={{ width: "100%", height: "100%" }}
+          blur={10.0}
         />
       </Box>
 
-      {/* Main Content Container */}
-      <Container
+      {/* Main Content Overlay */}
+      <Box
         position="relative"
         zIndex={1}
+        w="100vw"
         h="100vh"
-        maxW="4xl"
         display="flex"
         alignItems="center"
         justifyContent="center"
-        gap={8}
         px={8}
       >
+        <Box
+          w="100%"
+          maxW="6xl"
+          display="flex"
+          alignItems="center"
+          justifyContent="center"
+          gap={8}
+        >
         {/* User History Cards */}
         {showHistory && (
           <VStack gap={4} align="stretch" flex="0 0 auto">
             <Text
-              fontSize="lg"
-              fontWeight="semibold"
+              fontSize="2xl"
+              fontWeight="bold"
               color="fg"
               textAlign="center"
             >
@@ -137,8 +162,12 @@ function Login() {
                 />
               ))}
             </VStack>
-            <Separator orientation="vertical" h="200px" mx={4} />
           </VStack>
+        )}
+
+        {/* Separator between history and login form */}
+        {showHistory && (
+          <Separator orientation="vertical" h="200px" mx={6} />
         )}
 
         {/* Login Form */}
@@ -180,6 +209,7 @@ function Login() {
               </InputGroup>
             </Field>
             <PasswordInput
+              id="password"
               type="password"
               startElement={<FiLock />}
               {...register("password", passwordRules())}
@@ -200,7 +230,8 @@ function Login() {
             </Text>
           </VStack>
         </Box>
-      </Container>
+        </Box>
+      </Box>
     </Box>
   )
 }
