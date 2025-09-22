@@ -123,7 +123,7 @@ export function DICOMStudyList({ onStudySelect }: DICOMStudyListProps) {
     <VStack gap={4} align="stretch" w="full">
       <Box>
         <Text fontSize="xl" fontWeight="bold" mb={2}>
-          DICOM Studies ({studies.length})
+          CT Studies ({studies.length})
         </Text>
         <Text fontSize="sm" color="gray.600">
           Your uploaded medical imaging studies
@@ -172,7 +172,7 @@ export function DICOMStudyList({ onStudySelect }: DICOMStudyListProps) {
 
                   <HStack gap={6}>
                     <Text fontSize="sm" color="gray.600">
-                      <Text as="span" fontWeight="medium">Files:</Text>{' '}
+                      <Text as="span" fontWeight="medium">Slices:</Text>{' '}
                       {study.file_count}
                     </Text>
                     <Text fontSize="sm" color="gray.600">

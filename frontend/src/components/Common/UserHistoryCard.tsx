@@ -1,7 +1,6 @@
 import React from 'react';
-import { Card, Text, HStack, VStack, Avatar, Badge } from '@chakra-ui/react';
+import { Card, Text, HStack, VStack, Avatar, Badge, IconButton } from '@chakra-ui/react';
 import { FiX } from 'react-icons/fi';
-import { IconButton } from '@/components/ui/button';
 import GlareHover from '@/components/animations/interactive/GlareHover';
 import { UserHistory, UserHistoryService } from '@/utils/userHistory';
 

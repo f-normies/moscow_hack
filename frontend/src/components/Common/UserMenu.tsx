@@ -39,6 +39,7 @@ const UserMenu = () => {
                 maxW="120px"
                 noOfLines={1}
                 display={{ base: "none", md: "block" }}
+                color="fg"
               >
                 {user?.full_name || "User"}
               </Text>

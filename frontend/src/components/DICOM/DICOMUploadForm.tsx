@@ -120,26 +120,31 @@ export function DICOMUploadForm({ onUploadComplete }: DICOMUploadFormProps) {
   }
 
   return (
-    <VStack gap={6} align="stretch" w="full" maxW="600px">
+    <VStack gap={6} align="center" w="full" maxW="500px" mx="auto">
 
       <Field.Root>
-        <Field.Label>DICOM ZIP Archive</Field.Label>
+        <Field.Label color="fg">DICOM ZIP Archive</Field.Label>
         <Box
           position="relative"
           border="2px"
-          borderColor={dragActive ? 'blue.300' : 'gray.200'}
+          borderColor={dragActive ? 'ui.main' : 'border.muted'}
           borderStyle="dashed"
-          borderRadius="md"
-          p={8}
+          borderRadius="lg"
+          p={12}
           textAlign="center"
-          bg={dragActive ? 'blue.50' : 'gray.50'}
+          bg={dragActive ? 'bg.subtle' : 'bg.muted'}
           transition="all 0.2s"
           onDragEnter={handleDrag}
           onDragLeave={handleDrag}
           onDragOver={handleDrag}
           onDrop={handleDrop}
           cursor="pointer"
-          _hover={{ borderColor: 'blue.300', bg: 'blue.50' }}
+          _hover={{ borderColor: 'ui.main', bg: 'bg.subtle' }}
+          w="full"
+          aspectRatio="1.2"
+          display="flex"
+          alignItems="center"
+          justifyContent="center"
         >
           <Input
             type="file"
@@ -154,35 +159,35 @@ export function DICOMUploadForm({ onUploadComplete }: DICOMUploadFormProps) {
             cursor="pointer"
           />
 
-          <VStack gap={3}>
-            <Text fontSize="lg" color="gray.600">
+          <VStack gap={4}>
+            <Text fontSize="lg" color="fg.muted" fontWeight="medium">
               {dragActive ? 'Drop ZIP file here' : 'Click to select or drag and drop'}
             </Text>
-            <Text fontSize="sm" color="gray.500">
+            <Text fontSize="sm" color="fg.subtle">
               ZIP files up to 1GB containing DICOM images
             </Text>
           </VStack>
         </Box>
 
         {selectedFile && (
-          <Box mt={4} p={4} bg="blue.50" borderRadius="md">
+          <Box mt={4} p={4} bg="bg.subtle" borderRadius="md" border="1px solid" borderColor="border.subtle">
             <VStack align="start" gap={2}>
-              <Text fontWeight="medium">{selectedFile.name}</Text>
-              <Text fontSize="sm" color="gray.600">
+              <Text fontWeight="medium" color="fg">{selectedFile.name}</Text>
+              <Text fontSize="sm" color="fg.muted">
                 Size: {formatFileSize(selectedFile.size)}
               </Text>
             </VStack>
           </Box>
         )}
 
-        <Field.HelperText>
+        <Field.HelperText color="fg.subtle">
           Supported format: ZIP archives containing DICOM files (.dcm, .dicom)
         </Field.HelperText>
       </Field.Root>
 
       {uploadMutation.isPending && (
         <Box>
-          <Text fontSize="sm" mb={2} color="blue.600">
+          <Text fontSize="sm" mb={2} color="ui.main">
             Processing DICOM files...
           </Text>
           <Progress.Root size="lg" value={null} colorPalette="blue">
@@ -216,7 +221,7 @@ export function DICOMUploadForm({ onUploadComplete }: DICOMUploadFormProps) {
         disabled={!selectedFile || uploadMutation.isPending}
         loading={uploadMutation.isPending}
         loadingText="Processing..."
-        colorScheme="blue"
+colorPalette="teal"
         size="lg"
       >
         Upload DICOM Study

@@ -6,6 +6,7 @@ import {
 } from "@tanstack/react-router"
 import { type SubmitHandler, useForm } from "react-hook-form"
 import { FiLock, FiMail } from "react-icons/fi"
+import { useState, useEffect } from "react"
 
 import type { Body_login_login_access_token as AccessToken } from "@/client"
 import { Button } from "@/components/ui/button"
@@ -16,6 +17,8 @@ import useAuth, { isLoggedIn } from "@/hooks/useAuth"
 import Logo from "/assets/images/fastapi-logo.svg"
 import { emailPattern, passwordRules } from "../utils"
 import Threads from "@/components/animations/backgrounds/Threads"
+import { UserHistoryCard } from "@/components/Common/UserHistoryCard"
+import { UserHistory, UserHistoryService } from "@/utils/userHistory"
 
 export const Route = createFileRoute("/login")({
   component: Login,
@@ -30,9 +33,13 @@ export const Route = createFileRoute("/login")({
 
 function Login() {
   const { loginMutation, error, resetError } = useAuth()
+  const [userHistory, setUserHistory] = useState<UserHistory[]>([])
+  const [showHistory, setShowHistory] = useState(false)
+
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<AccessToken>({
     mode: "onBlur",
@@ -43,16 +50,39 @@ function Login() {
     },
   })
 
+  // Load user history on component mount
+  useEffect(() => {
+    const history = UserHistoryService.getUserHistory()
+    setUserHistory(history)
+    setShowHistory(history.length > 0)
+  }, [])
+
   const onSubmit: SubmitHandler<AccessToken> = async (data) => {
     if (isSubmitting) return
 
     resetError()
 
     try {
-      await loginMutation.mutateAsync(data)
+      const result = await loginMutation.mutateAsync(data)
+      // Save successful login to history
+      if (result) {
+        UserHistoryService.saveUserLogin({ email: data.username })
+      }
     } catch {
       // error is handled by useAuth hook
     }
+  }
+
+  const handleUserHistorySelect = (user: UserHistory) => {
+    setValue("username", user.email)
+    setShowHistory(false)
+  }
+
+  const handleRemoveUser = (email: string) => {
+    UserHistoryService.removeUser(email)
+    const updatedHistory = UserHistoryService.getUserHistory()
+    setUserHistory(updatedHistory)
+    setShowHistory(updatedHistory.length > 0)
   }
 
   return (

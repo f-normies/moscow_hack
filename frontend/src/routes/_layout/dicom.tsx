@@ -94,7 +94,7 @@ function CTStudiesPage() {
                   {selectedStudy.modality}
                 </Text>
                 <Text>
-                  <Text as="span" fontWeight="medium">Files:</Text>{' '}
+                  <Text as="span" fontWeight="medium">Slices:</Text>{' '}
                   {selectedStudy.file_count}
                 </Text>
                 <Text>
@@ -173,10 +173,12 @@ function CTStudiesPage() {
         <VStack gap={6} align="stretch">
           {/* Upload Section */}
           <Box>
-            <Text fontSize="lg" fontWeight="semibold" mb={4}>
+            <Text fontSize="lg" fontWeight="semibold" mb={4} textAlign="center">
               Upload New CT Study
             </Text>
-            <DICOMUploadForm onUploadComplete={handleUploadComplete} />
+            <Box display="flex" justifyContent="center">
+              <DICOMUploadForm onUploadComplete={handleUploadComplete} />
+            </Box>
           </Box>
 
           <Separator />
