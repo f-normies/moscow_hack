@@ -19,6 +19,7 @@ import { emailPattern, passwordRules } from "../utils"
 import Threads from "@/components/animations/backgrounds/Threads"
 import { UserHistoryCard } from "@/components/Common/UserHistoryCard"
 import { UserHistory, UserHistoryService } from "@/utils/userHistory"
+import { useColorModeValue } from "@/components/ui/color-mode"
 
 export const Route = createFileRoute("/login")({
   component: Login,
@@ -35,6 +36,17 @@ function Login() {
   const { loginMutation, autoLogin, error, resetError } = useAuth()
   const [userHistory, setUserHistory] = useState<UserHistory[]>([])
   const [showHistory, setShowHistory] = useState(false)
+
+  // Color mode aware glow effects
+  const loginFormGlow = useColorModeValue(
+    "0 4px 20px rgba(0, 0, 0, 0.1)", // Light mode: subtle shadow
+    "0 0 25px rgba(64, 255, 230, 0.2), 0 4px 20px rgba(0, 0, 0, 0.6)" // Dark mode: cyan glow + shadow
+  );
+
+  const separatorGlow = useColorModeValue(
+    "none", // Light mode: no glow
+    "0 0 15px rgba(64, 255, 230, 0.4)" // Dark mode: cyan glow
+  );
 
   const {
     register,
@@ -113,9 +125,8 @@ function Login() {
         zIndex={0}
       >
         <Threads
-          color={[0, 0.588, 0.533]} // #009688 in RGB normalized (0/255, 150/255, 136/255)
-          amplitude={1.3}
-          distance={1.4}
+          amplitude={2}
+          distance={0.6}
           enableMouseInteraction={true}
           style={{ width: "100%", height: "100%" }}
           blur={10.0}
@@ -167,7 +178,13 @@ function Login() {
 
         {/* Separator between history and login form */}
         {showHistory && (
-          <Separator orientation="vertical" h="200px" mx={6} />
+          <Separator
+            orientation="vertical"
+            h="200px"
+            mx={6}
+            boxShadow={separatorGlow}
+            transition="all 0.3s"
+          />
         )}
 
         {/* Login Form */}
@@ -181,7 +198,7 @@ function Login() {
           backdropFilter="blur(10px)"
           borderRadius="lg"
           p={8}
-          boxShadow="lg"
+          boxShadow={loginFormGlow}
         >
           <VStack gap={4} align="stretch">
             <Image
