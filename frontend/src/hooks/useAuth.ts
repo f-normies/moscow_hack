@@ -11,6 +11,7 @@ import {
   UsersService,
 } from "@/client"
 import { handleError } from "@/utils"
+import { UserHistoryService } from "@/utils/userHistory"
 
 const isLoggedIn = () => {
   return localStorage.getItem("access_token") !== null
@@ -46,11 +47,22 @@ const useAuth = () => {
       formData: data,
     })
     localStorage.setItem("access_token", response.access_token)
+
+    // Return the token response so we can chain user data fetching
+    return response
   }
 
   const loginMutation = useMutation({
     mutationFn: login,
-    onSuccess: () => {
+    onSuccess: async (response, variables) => {
+      // Save user history with token for automatic login
+      UserHistoryService.saveUserLogin({
+        email: variables.username,
+        full_name: variables.username.split('@')[0] // Use email prefix as fallback name
+      }, response.access_token)
+
+      // Invalidate and refetch user data after successful login
+      await queryClient.invalidateQueries({ queryKey: ["currentUser"] })
       navigate({ to: "/" })
     },
     onError: (err: ApiError) => {
@@ -63,10 +75,35 @@ const useAuth = () => {
     navigate({ to: "/login" })
   }
 
+  const autoLogin = async (email: string) => {
+    const storedToken = UserHistoryService.getStoredToken(email)
+    if (!storedToken) {
+      throw new Error("No stored token found")
+    }
+
+    // Set the token in localStorage
+    localStorage.setItem("access_token", storedToken)
+
+    try {
+      // Validate the token by testing it
+      await LoginService.testToken()
+
+      // If valid, invalidate queries and navigate
+      await queryClient.invalidateQueries({ queryKey: ["currentUser"] })
+      navigate({ to: "/" })
+    } catch (error) {
+      // Token is invalid, remove it from storage and history
+      localStorage.removeItem("access_token")
+      UserHistoryService.removeUser(email)
+      throw new Error("Stored token is invalid")
+    }
+  }
+
   return {
     signUpMutation,
     loginMutation,
     logout,
+    autoLogin,
     user,
     error,
     resetError: () => setError(null),

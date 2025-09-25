@@ -48,7 +48,7 @@ This is a full-stack web application template with:
 ### Database Migrations
 - Tool: Alembic for database schema migrations
 - Location: `backend/app/alembic/versions/`
-- Generation: `alembic revision --autogenerate -m "description"`
+- Generation: `docker compose exec backend alembic revision --autogenerate -m "description"`
 - Application: Automatic on container startup via `backend_pre_start.py`
 
 ## Git Workflow Guidelines
