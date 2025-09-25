@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Renderer, Program, Mesh, Triangle, Color } from 'ogl';
+import { useColorModeValue } from '@/components/ui/color-mode';
 
 interface ThreadsProps {
   color?: [number, number, number];
@@ -7,6 +8,8 @@ interface ThreadsProps {
   distance?: number;
   enableMouseInteraction?: boolean;
   blur?: number;
+  lightColor?: [number, number, number];
+  darkColor?: [number, number, number];
 }
 
 const vertexShader = `
@@ -127,15 +130,21 @@ void main() {
 `;
 
 const Threads: React.FC<ThreadsProps> = ({
-  color = [1, 1, 1],
+  color,
   amplitude = 1,
   distance = 0,
   enableMouseInteraction = false,
   blur = 10.0,
+  lightColor = [0, 0.588, 0.533], // Default teal for light mode
+  darkColor = [0.4, 1.0, 0.9], // Much brighter, more luminous teal for dark mode
   ...rest
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const animationFrameId = useRef<number>();
+
+  // Use color mode aware colors
+  const adaptiveColor = useColorModeValue(lightColor, darkColor);
+  const finalColor = color || adaptiveColor;
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -157,7 +166,7 @@ const Threads: React.FC<ThreadsProps> = ({
         iResolution: {
           value: new Color(gl.canvas.width, gl.canvas.height, gl.canvas.width / gl.canvas.height)
         },
-        uColor: { value: new Color(...color) },
+        uColor: { value: new Color(...finalColor) },
         uAmplitude: { value: amplitude },
         uDistance: { value: distance },
         uMouse: { value: new Float32Array([0.5, 0.5]) },
@@ -223,7 +232,7 @@ const Threads: React.FC<ThreadsProps> = ({
       if (container.contains(gl.canvas)) container.removeChild(gl.canvas);
       gl.getExtension('WEBGL_lose_context')?.loseContext();
     };
-  }, [color, amplitude, distance, enableMouseInteraction, blur]);
+  }, [finalColor, amplitude, distance, enableMouseInteraction, blur]);
 
   return <div ref={containerRef} className="w-full h-full relative" {...rest} />;
 };
