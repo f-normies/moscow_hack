@@ -2,6 +2,7 @@ import React from 'react';
 import { Card, Text, VStack, Avatar, Badge, IconButton } from '@chakra-ui/react';
 import { FiX } from 'react-icons/fi';
 import { UserHistory, UserHistoryService } from '@/utils/userHistory';
+import { useColorModeValue } from '@/components/ui/color-mode';
 
 interface UserHistoryCardProps {
   user: UserHistory;
@@ -17,6 +18,17 @@ export const UserHistoryCard: React.FC<UserHistoryCardProps> = ({
   const handleCardClick = () => {
     onSelect(user);
   };
+
+  // Color mode aware glow effects
+  const glowShadow = useColorModeValue(
+    "0 4px 12px rgba(0, 0, 0, 0.1)", // Light mode: subtle shadow
+    "0 0 20px rgba(64, 255, 230, 0.3), 0 4px 12px rgba(0, 0, 0, 0.5)" // Dark mode: cyan glow + shadow
+  );
+
+  const hoverGlowShadow = useColorModeValue(
+    "0 8px 20px rgba(0, 0, 0, 0.15)", // Light mode: enhanced shadow
+    "0 0 30px rgba(64, 255, 230, 0.5), 0 8px 20px rgba(0, 0, 0, 0.7)" // Dark mode: stronger cyan glow + shadow
+  );
 
   const handleRemoveClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -44,9 +56,10 @@ export const UserHistoryCard: React.FC<UserHistoryCardProps> = ({
       position="relative"
       cursor="pointer"
       transition="all 0.3s"
+      boxShadow={glowShadow}
       _hover={{
         transform: 'translateY(-4px)',
-        shadow: 'lg',
+        boxShadow: hoverGlowShadow,
       }}
       onClick={handleCardClick}
     >
