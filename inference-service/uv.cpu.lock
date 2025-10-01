@@ -517,7 +517,7 @@ wheels = [
 [[package]]
 name = "inference-service"
 version = "0.1.0"
-source = { editable = "." }
+source = { virtual = "." }
 dependencies = [
     { name = "celery" },
     { name = "minio" },
