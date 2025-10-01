@@ -282,37 +282,6 @@ services:
     networks:
       - default
 
-  inference-worker:
-    build:
-      context: ./inference-service
-      dockerfile: Dockerfile.gpu
-    restart: always
-    depends_on:
-      redis:
-        condition: service_healthy
-      db:
-        condition: service_healthy
-      minio:
-        condition: service_healthy
-    env_file:
-      - .env
-    environment:
-      - REDIS_URL=redis://redis:6379/0
-      - POSTGRES_SERVER=db
-      - MINIO_ENDPOINT=minio:9000
-      - MODELS_PATH=/models
-    volumes:
-      - inference-models:/models
-    networks:
-      - default
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-
 volumes:
   app-db-data:
   minio-data:

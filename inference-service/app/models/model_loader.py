@@ -30,7 +30,7 @@ class ModelLoader:
 
         # Configure providers
         providers = []
-        for provider in settings.ONNX_PROVIDERS:
+        for provider in settings.effective_onnx_providers:
             if provider == "CUDAExecutionProvider":
                 providers.append(
                     (

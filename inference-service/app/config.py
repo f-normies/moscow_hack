@@ -41,5 +41,26 @@ class InferenceSettings(BaseSettings):
     USE_TEST_TIME_AUGMENTATION: bool = False
     BATCH_SIZE: int = 1
 
+    @property
+    def effective_onnx_providers(self) -> List[str]:
+        """Auto-detect and validate available ONNX providers"""
+        import onnxruntime as ort
+        available = ort.get_available_providers()
+
+        # Filter to only available providers
+        providers = [p for p in self.ONNX_PROVIDERS if p in available]
+
+        if not providers:
+            # Fallback to CPU if nothing available
+            providers = ["CPUExecutionProvider"]
+
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"ONNX providers requested: {self.ONNX_PROVIDERS}")
+        logger.info(f"ONNX providers available: {available}")
+        logger.info(f"ONNX providers using: {providers}")
+
+        return providers
+
 
 settings = InferenceSettings()  # type: ignore
