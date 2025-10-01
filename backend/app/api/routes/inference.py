@@ -19,6 +19,7 @@ from app.models import (
 )
 from app.services.inference_service import inference_service
 from app.services.minio_service import minio_service
+from app.celery_client import get_active_workers
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -207,11 +208,16 @@ async def list_available_models(
 @router.get("/health", response_model=dict)
 async def inference_health_check() -> dict:
     """
-    Check inference service health
+    Check inference service health and active worker count
     """
     try:
-        # TODO: Check Celery/Redis connection when implemented
-        return {"status": "healthy", "service": "InferenceService", "workers": 0}
+        worker_count = get_active_workers()
+
+        return {
+            "status": "healthy",
+            "service": "InferenceService",
+            "workers": worker_count,
+        }
 
     except Exception as e:
         logger.error(f"Inference health check failed: {e}")
