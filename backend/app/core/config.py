@@ -130,6 +130,12 @@ class Settings(BaseSettings):
     # General file size limit (fallback/legacy)
     MAX_FILE_SIZE: int = 100 * 1024 * 1024  # 100MB
 
+    # Inference service configuration
+    REDIS_URL: str = "redis://redis:6379/0"
+    INFERENCE_MODELS_PATH: str = "/models"
+    INFERENCE_TIMEOUT: int = 3600  # 1 hour max
+    ONNX_PROVIDERS: list[str] = ["CUDAExecutionProvider", "CPUExecutionProvider"]
+
     @computed_field  # type: ignore[prop-decorator]
     @property
     def ALLOWED_FILE_TYPES(self) -> list[str]:
