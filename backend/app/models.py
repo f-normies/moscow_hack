@@ -54,6 +54,7 @@ class User(UserBase, table=True):
     dicom_studies: list["DICOMStudy"] = Relationship(
         back_populates="owner", cascade_delete=True
     )
+    inference_jobs: list["InferenceJob"] = Relationship(cascade_delete=True)
 
 
 # Properties to return via API, id is always required
@@ -275,4 +276,129 @@ class DICOMMetadata(DICOMMetadataBase, table=True):
 class DICOMMetadataPublic(DICOMMetadataBase):
     id: uuid.UUID
     file_id: uuid.UUID
+    created_at: datetime
+
+
+# Inference Models for AI Segmentation
+
+# Inference Model - Catalog of available models
+class InferenceModelBase(SQLModel):
+    model_config = {"protected_namespaces": ()}  # Allow model_ prefix
+
+    name: str = Field(max_length=255)
+    model_type: str = Field(max_length=50)  # "multitalent", "nnunet"
+    onnx_path: str = Field(max_length=500)
+    config_path: str = Field(max_length=500)
+    modality: str = Field(max_length=50)  # "CT", "MRI", "PET"
+    description: str | None = None
+    is_active: bool = True
+
+
+class InferenceModelCreate(InferenceModelBase):
+    pass
+
+
+class InferenceModel(InferenceModelBase, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    # Relationships
+    jobs: list["InferenceJob"] = Relationship(back_populates="model")
+
+
+class InferenceModelPublic(InferenceModelBase):
+    id: uuid.UUID
+    created_at: datetime
+
+
+# Inference Job - Track job lifecycle
+class InferenceJobBase(SQLModel):
+    model_config = {"protected_namespaces": ()}  # Allow model_ prefix
+
+    status: str = Field(max_length=50)  # pending, running, completed, failed, cancelled
+    progress: float = Field(default=0.0, ge=0.0, le=1.0)
+    error_message: str | None = None
+    parameters: Dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
+    result_path: str | None = Field(default=None, max_length=500)
+    metrics: Dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
+
+
+class InferenceJobCreate(SQLModel):
+    model_config = {"protected_namespaces": ()}  # Allow model_ prefix
+
+    study_id: uuid.UUID
+    series_id: uuid.UUID | None = None
+    model_id: uuid.UUID
+    parameters: Dict[str, Any] | None = None
+
+
+class InferenceJob(InferenceJobBase, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    user_id: uuid.UUID = Field(
+        foreign_key="user.id", nullable=False, ondelete="CASCADE"
+    )
+    study_id: uuid.UUID = Field(
+        foreign_key="dicomstudy.id", nullable=False, ondelete="CASCADE"
+    )
+    series_id: uuid.UUID | None = Field(
+        foreign_key="dicomseries.id", nullable=True, ondelete="CASCADE"
+    )
+    model_id: uuid.UUID = Field(foreign_key="inferencemodel.id", nullable=False)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+
+    # Relationships
+    user: User | None = Relationship(sa_relationship_kwargs={"overlaps": "inference_jobs"})
+    study: DICOMStudy | None = Relationship()
+    series: DICOMSeries | None = Relationship()
+    model: InferenceModel | None = Relationship(back_populates="jobs")
+    results: list["SegmentationResult"] = Relationship(
+        back_populates="job", cascade_delete=True
+    )
+
+
+class InferenceJobPublic(InferenceJobBase):
+    model_config = {"protected_namespaces": ()}  # Allow model_ prefix
+
+    id: uuid.UUID
+    model_id: uuid.UUID
+    study_id: uuid.UUID
+    series_id: uuid.UUID | None
+    created_at: datetime
+    started_at: datetime | None
+    completed_at: datetime | None
+
+
+class InferenceJobsPublic(SQLModel):
+    data: list[InferenceJobPublic]
+    count: int
+
+
+# Segmentation Result - Store output artifacts
+class SegmentationResultBase(SQLModel):
+    output_format: str = Field(max_length=50)  # "nifti", "dicom-seg"
+    file_path: str = Field(max_length=500)
+    classes: Dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
+    result_metadata: Dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
+
+
+class SegmentationResultCreate(SegmentationResultBase):
+    job_id: uuid.UUID
+
+
+class SegmentationResult(SegmentationResultBase, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    job_id: uuid.UUID = Field(
+        foreign_key="inferencejob.id", nullable=False, ondelete="CASCADE"
+    )
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    # Relationships
+    job: InferenceJob | None = Relationship(back_populates="results")
+
+
+class SegmentationResultPublic(SegmentationResultBase):
+    id: uuid.UUID
+    job_id: uuid.UUID
     created_at: datetime
