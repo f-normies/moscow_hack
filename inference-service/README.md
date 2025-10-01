@@ -2,16 +2,58 @@
 
 AI inference microservice for medical image segmentation using ONNX Runtime.
 
+## Quick Start
+
+### Development (Full Application Stack)
+
+**CPU Mode (recommended for local development):**
+```bash
+docker compose -f docker-compose.yml -f docker-compose.override.yml -f docker-compose.cpu.yml up -d 
+```
+
+**GPU Mode (if you have NVIDIA GPU):**
+```bash
+docker compose -f docker-compose.yml -f docker-compose.override.yml -f docker-compose.gpu.yml up -d 
+```
+
+This starts all services: frontend, backend, database, MinIO, Redis, Traefik, and the inference worker.
+
+### Production (Inference Worker Only)
+
+**CPU Mode:**
+```bash
+docker compose -f docker-compose.yml -f docker-compose.cpu.yml up -d
+```
+
+**GPU Mode:**
+```bash
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+```
+
+This only starts the inference worker, assuming other services are already running.
+
+---
+
 ## Deployment Options
 
 The inference service supports flexible deployment on both CPU and GPU infrastructure.
 
-### GPU Deployment (Production)
+### GPU Deployment
 
-For production environments with GPU acceleration:
+#### Production (Inference Worker Only)
+
+For production environments with GPU acceleration (assumes other services already running):
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+```
+
+#### Development (Full Stack)
+
+For local development with all services and GPU acceleration:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.override.yml -f docker-compose.gpu.yml up -d
 ```
 
 **Requirements:**
@@ -23,13 +65,35 @@ docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
 - CT Chest (512×512×300): 15-30 seconds
 - Throughput: 4-6 studies/minute
 
-### CPU Deployment (Development)
+### CPU Deployment
 
-For local development or environments without GPU:
+#### Production (Inference Worker Only)
+
+For production environments without GPU (assumes other services already running):
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.cpu.yml up -d
 ```
+
+#### Development (Full Stack)
+
+For local development with all services (backend, frontend, database, inference worker):
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.override.yml -f docker-compose.cpu.yml up -d
+```
+
+This starts the complete development environment:
+- **Frontend**: http://localhost:5173
+- **Backend API**: http://localhost:8000 (with hot-reload)
+- **API Docs**: http://localhost:8000/docs
+- **Database**: PostgreSQL on port 5432
+- **Adminer (DB UI)**: http://localhost:8080
+- **MinIO API**: http://localhost:9000
+- **MinIO Console**: http://localhost:9001
+- **Redis**: Port 6379
+- **Traefik Dashboard**: http://localhost:8090
+- **Inference Worker**: CPU mode with hot-reload
 
 **Suitable for:**
 - Local development without GPU
@@ -46,8 +110,14 @@ docker compose -f docker-compose.yml -f docker-compose.cpu.yml up -d
 
 Run both CPU and GPU workers simultaneously:
 
+**Production:**
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.gpu.yml -f docker-compose.cpu.yml up -d
+```
+
+**Development:**
+```bash
+docker compose -f docker-compose.yml -f docker-compose.override.yml -f docker-compose.gpu.yml -f docker-compose.cpu.yml up
 ```
 
 GPU handles priority jobs, CPU handles overflow.
@@ -94,13 +164,15 @@ docker compose -f docker-compose.yml -f docker-compose.gpu.yml build inference-w
 
 CPU worker:
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.cpu.yml logs -f inference-worker-cpu
+docker compose logs -f inference-worker-cpu
 ```
 
 GPU worker:
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.gpu.yml logs -f inference-worker-gpu
+docker compose logs -f inference-worker-gpu
 ```
+
+**Note:** The `logs` command works regardless of which compose files were used to start the services.
 
 ### Configuration
 
