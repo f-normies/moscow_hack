@@ -1,7 +1,9 @@
 import logging
 import numpy as np
 import onnxruntime as ort
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Tuple, Optional, Callable
+
+from app.pipeline.model_configs import ModelConfigFactory
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +21,7 @@ class InferenceEngine:
         input_data: np.ndarray,
         config: Dict[str, Any],
         parameters: Dict[str, Any],
+        progress_callback: Optional[Callable[[int, int], None]] = None,
     ) -> np.ndarray:
         """
         Run inference with sliding window
@@ -28,11 +31,16 @@ class InferenceEngine:
             input_data: Preprocessed image (1, 1, Z, Y, X)
             config: Model configuration (patch size, etc.)
             parameters: Job-specific parameters
+            progress_callback: Optional callback function(current_patch, total_patches)
 
         Returns:
             predictions: Logits or probabilities (1, num_classes, Z, Y, X)
         """
-        patch_size = config.get("patch_size", [128, 128, 128])
+        # Use config parser to extract parameters
+        config_parser = ModelConfigFactory.get_parser(config)
+        patch_size = config_parser.get_patch_size()
+        num_classes = config_parser.get_num_classes()
+
         step_size = parameters.get("step_size", 0.5)  # 50% overlap
         use_gaussian = parameters.get("use_gaussian", True)
         use_tta = parameters.get("use_tta", False)  # Test-time augmentation
@@ -41,6 +49,9 @@ class InferenceEngine:
             f"Running sliding window inference: patch_size={patch_size}, step_size={step_size}"
         )
 
+        # Pad input if needed to match patch_size
+        input_data, padding_info = self._pad_to_patch_size(input_data, patch_size)
+
         # Generate sliding window coordinates
         windows = self._generate_sliding_windows(
             input_data.shape[2:], patch_size, step_size  # (Z, Y, X)
@@ -48,7 +59,6 @@ class InferenceEngine:
 
         # Initialize aggregation arrays
         _, _, d, h, w = input_data.shape
-        num_classes = config.get("num_classes", 2)  # Binary by default
         aggregated_logits = np.zeros((1, num_classes, d, h, w), dtype=np.float32)
         aggregated_weights = np.zeros((1, 1, d, h, w), dtype=np.float32)
 
@@ -82,11 +92,18 @@ class InferenceEngine:
                 gaussian_map[np.newaxis, np.newaxis, :]
             )
 
+            # Update progress every 10 patches
             if (i + 1) % 10 == 0:
                 logger.info(f"Processed {i + 1}/{len(windows)} patches")
+                if progress_callback:
+                    progress_callback(i + 1, len(windows))
 
         # Normalize by weights
         aggregated_logits /= aggregated_weights + 1e-8
+
+        # Remove padding if it was added
+        if padding_info is not None:
+            aggregated_logits = self._remove_padding(aggregated_logits, padding_info)
 
         logger.info(
             f"Sliding window inference complete: {len(windows)} patches processed"
@@ -207,3 +224,93 @@ class InferenceEngine:
         # Average all predictions
         tta_logits = np.mean(augmented_predictions, axis=0)
         return tta_logits
+
+    def _pad_to_patch_size(
+        self, input_data: np.ndarray, patch_size: List[int]
+    ) -> Tuple[np.ndarray, Optional[Dict[str, Any]]]:
+        """
+        Pad input to match patch_size if needed
+
+        Args:
+            input_data: Input array (1, 1, Z, Y, X)
+            patch_size: Target patch size [Z, Y, X]
+
+        Returns:
+            (padded_data, padding_info) where padding_info is None if no padding was needed
+        """
+        _, _, d, h, w = input_data.shape
+        pd, ph, pw = patch_size
+
+        # Check if padding is needed
+        if d >= pd and h >= ph and w >= pw:
+            logger.info("No padding needed")
+            return input_data, None
+
+        # Calculate padding amounts
+        pad_d = max(0, pd - d)
+        pad_h = max(0, ph - h)
+        pad_w = max(0, pw - w)
+
+        # Pad symmetrically (pad before and after)
+        pad_d_before = pad_d // 2
+        pad_d_after = pad_d - pad_d_before
+        pad_h_before = pad_h // 2
+        pad_h_after = pad_h - pad_h_before
+        pad_w_before = pad_w // 2
+        pad_w_after = pad_w - pad_w_before
+
+        # Apply padding (edge mode to avoid introducing zeros at boundaries)
+        padded = np.pad(
+            input_data,
+            (
+                (0, 0),  # batch
+                (0, 0),  # channel
+                (pad_d_before, pad_d_after),  # Z
+                (pad_h_before, pad_h_after),  # Y
+                (pad_w_before, pad_w_after),  # X
+            ),
+            mode="edge",
+        )
+
+        padding_info = {
+            "original_shape": (d, h, w),
+            "pad_d": (pad_d_before, pad_d_after),
+            "pad_h": (pad_h_before, pad_h_after),
+            "pad_w": (pad_w_before, pad_w_after),
+        }
+
+        logger.info(
+            f"Padded input from {input_data.shape} to {padded.shape} to match patch_size {patch_size}"
+        )
+        return padded, padding_info
+
+    def _remove_padding(
+        self, output: np.ndarray, padding_info: Dict[str, Any]
+    ) -> np.ndarray:
+        """
+        Remove padding from output
+
+        Args:
+            output: Padded output (1, num_classes, Z, Y, X)
+            padding_info: Padding information from _pad_to_patch_size
+
+        Returns:
+            Unpadded output
+        """
+        pad_d_before, pad_d_after = padding_info["pad_d"]
+        pad_h_before, pad_h_after = padding_info["pad_h"]
+        pad_w_before, pad_w_after = padding_info["pad_w"]
+
+        # Calculate slice indices
+        d_start = pad_d_before
+        d_end = output.shape[2] - pad_d_after if pad_d_after > 0 else output.shape[2]
+        h_start = pad_h_before
+        h_end = output.shape[3] - pad_h_after if pad_h_after > 0 else output.shape[3]
+        w_start = pad_w_before
+        w_end = output.shape[4] - pad_w_after if pad_w_after > 0 else output.shape[4]
+
+        # Remove padding
+        unpadded = output[:, :, d_start:d_end, h_start:h_end, w_start:w_end]
+
+        logger.info(f"Removed padding: {output.shape} -> {unpadded.shape}")
+        return unpadded

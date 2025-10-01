@@ -62,8 +62,8 @@ def run_inference_task(self, job_id_str: str) -> Dict[str, Any]:
     logger.info(f"Starting inference job {job_id}")
 
     try:
-        # Import models here to avoid circular imports
-        from backend.app.models import (
+        # Import models from local worker models
+        from app.db_models import (
             InferenceJob,
             InferenceModel,
             SegmentationResult,
@@ -93,9 +93,9 @@ def run_inference_task(self, job_id_str: str) -> Dict[str, Any]:
             if not model:
                 raise ValueError(f"Model {job.model_id} not found")
 
-            # Load model
+            # Load model and config together
             logger.info(f"Loading model {model.name}")
-            onnx_session = self.model_loader.load_model(
+            onnx_session, config = self.model_loader.load_model_with_config(
                 model.onnx_path, model.config_path
             )
             job.progress = 0.1
@@ -109,18 +109,30 @@ def run_inference_task(self, job_id_str: str) -> Dict[str, Any]:
                 study_id=job.study_id,
                 series_id=job.series_id,
                 session=session,
+                model_config=config,
             )
             job.progress = 0.3
             session.add(job)
             session.commit()
 
-            # Run inference
+            # Run inference with progress tracking
             logger.info(f"Running inference for job {job_id}")
+
+            # Create progress callback to update DB during inference
+            def update_inference_progress(current_patch: int, total_patches: int):
+                """Update job progress during sliding window inference"""
+                # Map patch progress to 0.3-0.7 range (40% of total job)
+                patch_fraction = current_patch / total_patches
+                job.progress = 0.3 + (patch_fraction * 0.4)
+                session.add(job)
+                session.commit()
+
             predictions = self.inference_engine.predict(
                 onnx_session=onnx_session,
                 input_data=preprocessed_data["image"],
-                config=self.model_loader.get_config(model.config_path),
+                config=config,
                 parameters=job.parameters or {},
+                progress_callback=update_inference_progress,
             )
             job.progress = 0.7
             session.add(job)
@@ -135,6 +147,7 @@ def run_inference_task(self, job_id_str: str) -> Dict[str, Any]:
                 if job.parameters
                 else "nifti",
                 job_id=job_id,
+                model_config=config,
             )
             job.progress = 0.9
             session.add(job)
@@ -170,7 +183,7 @@ def run_inference_task(self, job_id_str: str) -> Dict[str, Any]:
         # Update job status
         try:
             with Session(engine) as session:
-                from backend.app.models import InferenceJob
+                from app.db_models import InferenceJob
 
                 job = session.exec(
                     select(InferenceJob).where(InferenceJob.id == job_id)

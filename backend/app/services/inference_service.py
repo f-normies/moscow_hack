@@ -69,13 +69,16 @@ class InferenceService:
         session.commit()
         session.refresh(job)
 
-        # TODO: Enqueue to Celery when worker is ready
-        # from app.services.inference_tasks import run_inference_task
-        # run_inference_task.apply_async(
-        #     args=[str(job.id)],
-        #     task_id=str(job.id)
-        # )
+        # Enqueue task to Celery worker
+        from app.celery_client import celery_app
+        celery_app.send_task(
+            "app.tasks.run_inference",
+            args=[str(job.id)],
+            task_id=str(job.id),
+            queue="celery"
+        )
 
+        logger.info(f"Submitted inference job {job.id} to Celery queue")
         logger.info(f"Submitted inference job {job.id} for study {study.id}")
         return job
 

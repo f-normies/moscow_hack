@@ -10,6 +10,7 @@ from skimage.measure import label
 
 from minio import Minio
 from app.config import settings
+from app.pipeline.model_configs import ModelConfigFactory
 
 logger = logging.getLogger(__name__)
 
@@ -196,19 +197,14 @@ class Postprocessor:
         """
         Extract class ID to name mapping from model config
 
-        TODO: Support multiple config formats:
+        Uses ModelConfigParser to support multiple config formats:
         - nnUNet: config["dataset_parameters"]["class_names"]
         - MultiTalent: TBD (document format in multitalent_todo.md)
         """
-        # Try nnUNet format
-        if "dataset_parameters" in config and "class_names" in config["dataset_parameters"]:
-            class_names = config["dataset_parameters"]["class_names"]
-            # Convert string keys to int
-            return {int(k): v for k, v in class_names.items()}
-
-        # Fallback: generic names
-        logger.warning("Could not extract class names from config, using generic names")
-        return {}
+        config_parser = ModelConfigFactory.get_parser(config)
+        class_names = config_parser.get_class_names()
+        # Convert string keys to int if needed
+        return {int(k): v for k, v in class_names.items()}
 
     def _calculate_metrics(
         self, segmentation: np.ndarray, model_config: Dict[str, Any]

@@ -10,6 +10,7 @@ from sqlmodel import Session, select, create_engine
 from minio import Minio
 
 from app.config import settings
+from app.pipeline.model_configs import ModelConfigFactory
 
 logger = logging.getLogger(__name__)
 
@@ -48,8 +49,8 @@ class Preprocessor:
                 - 'image': preprocessed numpy array
                 - 'metadata': metadata for postprocessing
         """
-        # Import here to avoid circular imports
-        from backend.app.models import DICOMMetadata, FileMetadata, DICOMSeries
+        # Import local worker models
+        from app.db_models import DICOMMetadata, FileMetadata, DICOMSeries
 
         # 1. Load DICOM files from MinIO
         dicom_files = self._load_dicom_from_minio(
@@ -189,17 +190,12 @@ class Preprocessor:
         """
         Extract target spacing from model config
 
-        TODO: Support multiple config formats:
+        Uses ModelConfigParser to support multiple config formats:
         - nnUNet: config["model_parameters"]["spacing"]
         - MultiTalent: TBD (document format in multitalent_todo.md)
         """
-        # For now, assume nnUNet format
-        if "model_parameters" in config and "spacing" in config["model_parameters"]:
-            return tuple(config["model_parameters"]["spacing"])
-
-        # Fallback
-        logger.warning("Could not extract spacing from config, using default")
-        return (1.0, 1.0, 1.0)
+        config_parser = ModelConfigFactory.get_parser(config)
+        return config_parser.get_spacing()
 
     def _normalize_intensity_from_config(
         self, array: np.ndarray, config: Dict[str, Any]
@@ -207,26 +203,15 @@ class Preprocessor:
         """
         Apply intensity normalization based on model config
 
-        TODO: Support multiple config formats:
+        Uses ModelConfigParser to support multiple config formats:
         - nnUNet: Uses normalization_schemes and foreground_properties
         - MultiTalent: TBD (document format in multitalent_todo.md)
         """
-        # Try to extract nnUNet-style normalization
-        if "model_parameters" in config and "normalization_schemes" in config["model_parameters"]:
-            norm_scheme = config["model_parameters"]["normalization_schemes"][0]
+        config_parser = ModelConfigFactory.get_parser(config)
+        norm_scheme = config_parser.get_normalization_scheme()
+        foreground_props = config_parser.get_foreground_properties()
 
-            # Extract foreground properties if available
-            foreground_props = None
-            if "dataset_parameters" in config:
-                channels = config["dataset_parameters"].get("channels", {})
-                if "0" in channels:
-                    foreground_props = channels["0"].get("foreground_properties")
-
-            return self._normalize_intensity(array, norm_scheme, foreground_props)
-
-        # Fallback: use default CT normalization
-        logger.warning("Could not extract normalization from config, using CT defaults")
-        return self._normalize_intensity(array, "CTNormalization", None)
+        return self._normalize_intensity(array, norm_scheme, foreground_props)
 
     def _normalize_intensity(
         self,
