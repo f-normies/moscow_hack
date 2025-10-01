@@ -31,9 +31,17 @@ class Postprocessor:
         preprocessed_metadata: Dict[str, Any],
         output_format: str,
         job_id: uuid.UUID,
+        model_config: Dict[str, Any],
     ) -> Tuple[str, Dict[str, Any]]:
         """
         Postprocess predictions and upload to MinIO
+
+        Args:
+            predictions: Model output logits
+            preprocessed_metadata: Metadata from preprocessing
+            output_format: Output format (nifti, dicom-seg)
+            job_id: Job identifier
+            model_config: Model configuration from config.json
 
         Returns:
             (minio_path, metrics)
@@ -50,8 +58,9 @@ class Postprocessor:
         # 4. Restore original dimensions (uncrop)
         restored_seg = self._restore_original_shape(filtered_seg, preprocessed_metadata)
 
-        # 5. Calculate metrics
-        metrics = self._calculate_metrics(restored_seg)
+        # 5. Calculate metrics with class names from config
+        # TODO: Support multiple config formats for class names
+        metrics = self._calculate_metrics(restored_seg, model_config)
 
         # 6. Convert to output format
         output_path = self._convert_to_format(
@@ -181,28 +190,60 @@ class Postprocessor:
         logger.info(f"Restored original shape: {segmentation.shape} -> {restored.shape}")
         return restored
 
-    def _calculate_metrics(self, segmentation: np.ndarray) -> Dict[str, Any]:
-        """Calculate quality metrics"""
-        unique_classes = np.unique(segmentation)
-        class_volumes = {}
-        class_counts = {}
+    def _extract_class_names_from_config(
+        self, config: Dict[str, Any]
+    ) -> Dict[int, str]:
+        """
+        Extract class ID to name mapping from model config
 
+        TODO: Support multiple config formats:
+        - nnUNet: config["dataset_parameters"]["class_names"]
+        - MultiTalent: TBD (document format in multitalent_todo.md)
+        """
+        # Try nnUNet format
+        if "dataset_parameters" in config and "class_names" in config["dataset_parameters"]:
+            class_names = config["dataset_parameters"]["class_names"]
+            # Convert string keys to int
+            return {int(k): v for k, v in class_names.items()}
+
+        # Fallback: generic names
+        logger.warning("Could not extract class names from config, using generic names")
+        return {}
+
+    def _calculate_metrics(
+        self, segmentation: np.ndarray, model_config: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Calculate quality metrics with class name mapping
+
+        Args:
+            segmentation: Segmentation mask
+            model_config: Model configuration for class names
+        """
+        unique_classes = np.unique(segmentation)
+        class_names_map = self._extract_class_names_from_config(model_config)
+
+        class_info = {}
         for class_id in unique_classes:
             if class_id == 0:  # Skip background
                 continue
 
             class_mask = segmentation == class_id
-            class_counts[int(class_id)] = int(np.sum(class_mask))
-            class_volumes[int(class_id)] = float(np.sum(class_mask))  # In voxels
+            voxel_count = int(np.sum(class_mask))
+
+            class_name = class_names_map.get(int(class_id), f"class_{class_id}")
+
+            class_info[class_name] = {
+                "class_id": int(class_id),
+                "voxel_count": voxel_count,
+                "volume_mm3": float(voxel_count),  # TODO: Calculate with spacing
+            }
 
         metrics = {
-            "classes": {
-                "detected": list(unique_classes.tolist()),
-                "counts": class_counts,
-                "volumes": class_volumes,
-            },
+            "detected_classes": class_info,
             "total_foreground_voxels": int(np.sum(segmentation > 0)),
-            "shape": segmentation.shape,
+            "output_shape": list(segmentation.shape),
+            "unique_class_ids": unique_classes.tolist(),
         }
 
         return metrics

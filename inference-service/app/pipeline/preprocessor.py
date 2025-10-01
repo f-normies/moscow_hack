@@ -31,9 +31,17 @@ class Preprocessor:
         study_id: uuid.UUID,
         series_id: uuid.UUID | None,
         session: Session,
+        model_config: Dict[str, Any],
     ) -> Dict[str, Any]:
         """
         Main preprocessing pipeline
+
+        Args:
+            job_id: Job identifier
+            study_id: DICOM study ID
+            series_id: Optional DICOM series ID
+            session: Database session
+            model_config: Model configuration dict from config.json
 
         Returns:
             Dict with:
@@ -64,13 +72,15 @@ class Preprocessor:
         bbox, cropped_array = self._crop_to_nonzero(image_array)
 
         # 6. Intensity normalization (MUST happen before resampling)
-        normalized_array = self._normalize_intensity(
-            cropped_array, modality="CT"  # TODO: Detect from DICOM metadata
+        # TODO: Create model-type-specific parameter extraction
+        # This currently assumes nnUNet format, need to support MultiTalent
+        normalized_array = self._normalize_intensity_from_config(
+            cropped_array, model_config
         )
 
         # 7. Resample to target spacing
-        # TODO: Load target spacing from model config
-        target_spacing = (1.0, 1.0, 1.0)  # Example: 1mm isotropic
+        # TODO: Create model-type-specific spacing extraction
+        target_spacing = self._get_target_spacing_from_config(model_config)
         resampled_array = self._resample_image(
             normalized_array, original_spacing, target_spacing
         )
@@ -175,17 +185,74 @@ class Preprocessor:
         logger.info(f"Cropped to nonzero: {array.shape} -> {cropped.shape}")
         return bbox, cropped
 
-    def _normalize_intensity(self, array: np.ndarray, modality: str) -> np.ndarray:
+    def _get_target_spacing_from_config(self, config: Dict[str, Any]) -> tuple:
+        """
+        Extract target spacing from model config
+
+        TODO: Support multiple config formats:
+        - nnUNet: config["model_parameters"]["spacing"]
+        - MultiTalent: TBD (document format in multitalent_todo.md)
+        """
+        # For now, assume nnUNet format
+        if "model_parameters" in config and "spacing" in config["model_parameters"]:
+            return tuple(config["model_parameters"]["spacing"])
+
+        # Fallback
+        logger.warning("Could not extract spacing from config, using default")
+        return (1.0, 1.0, 1.0)
+
+    def _normalize_intensity_from_config(
+        self, array: np.ndarray, config: Dict[str, Any]
+    ) -> np.ndarray:
+        """
+        Apply intensity normalization based on model config
+
+        TODO: Support multiple config formats:
+        - nnUNet: Uses normalization_schemes and foreground_properties
+        - MultiTalent: TBD (document format in multitalent_todo.md)
+        """
+        # Try to extract nnUNet-style normalization
+        if "model_parameters" in config and "normalization_schemes" in config["model_parameters"]:
+            norm_scheme = config["model_parameters"]["normalization_schemes"][0]
+
+            # Extract foreground properties if available
+            foreground_props = None
+            if "dataset_parameters" in config:
+                channels = config["dataset_parameters"].get("channels", {})
+                if "0" in channels:
+                    foreground_props = channels["0"].get("foreground_properties")
+
+            return self._normalize_intensity(array, norm_scheme, foreground_props)
+
+        # Fallback: use default CT normalization
+        logger.warning("Could not extract normalization from config, using CT defaults")
+        return self._normalize_intensity(array, "CTNormalization", None)
+
+    def _normalize_intensity(
+        self,
+        array: np.ndarray,
+        normalization_scheme: str,
+        foreground_properties: Dict[str, float] | None = None,
+    ) -> np.ndarray:
         """
         Apply intensity normalization
 
-        For CT: Percentile clipping + z-score normalization
-        For MRI: Different schemes per sequence type
+        Args:
+            array: Input array
+            normalization_scheme: Normalization type (e.g., "CTNormalization", "ZScoreNormalization")
+            foreground_properties: Optional dict with percentiles/stats from training
+
+        Returns:
+            Normalized array
         """
-        if modality == "CT":
-            # CT normalization
-            lower_percentile = np.percentile(array, 0.5)
-            upper_percentile = np.percentile(array, 99.5)
+        if normalization_scheme == "CTNormalization":
+            # CT normalization with optional foreground properties
+            if foreground_properties:
+                lower_percentile = foreground_properties.get("percentile_00_5", np.percentile(array, 0.5))
+                upper_percentile = foreground_properties.get("percentile_99_5", np.percentile(array, 99.5))
+            else:
+                lower_percentile = np.percentile(array, 0.5)
+                upper_percentile = np.percentile(array, 99.5)
 
             # Clip
             clipped = np.clip(array, lower_percentile, upper_percentile)
@@ -199,8 +266,17 @@ class Preprocessor:
                 f"CT normalization: percentiles=({lower_percentile:.1f}, {upper_percentile:.1f}), mean={mean:.1f}, std={std:.1f}"
             )
 
-        elif modality == "MRI":
-            # MRI normalization (simplified - should be sequence-specific)
+        elif normalization_scheme == "ZScoreNormalization":
+            # Simple z-score normalization
+            mean = array.mean()
+            std = array.std()
+            normalized = (array - mean) / (std + 1e-8)
+
+            logger.info(f"ZScore normalization: mean={mean:.1f}, std={std:.1f}")
+
+        else:
+            # Default: foreground-based normalization for MRI-like data
+            logger.warning(f"Unknown normalization scheme: {normalization_scheme}, using foreground-based")
             mask = array > array.mean()
             foreground = array[mask]
 
@@ -211,13 +287,7 @@ class Preprocessor:
             else:
                 normalized = array
 
-            logger.info(f"MRI normalization: foreground mean={mean:.1f}, std={std:.1f}")
-
-        else:
-            # Default: simple z-score
-            mean = array.mean()
-            std = array.std()
-            normalized = (array - mean) / (std + 1e-8)
+            logger.info(f"Foreground normalization: mean={mean:.1f}, std={std:.1f}")
 
         return normalized.astype(np.float32)
 

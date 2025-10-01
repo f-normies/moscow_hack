@@ -1,7 +1,7 @@
 import logging
 import json
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, Tuple
 import onnxruntime as ort
 
 from app.config import settings
@@ -84,3 +84,17 @@ class ModelLoader:
 
         logger.info(f"Loaded config: {config_path}")
         return config
+
+    def load_model_with_config(
+        self, onnx_path: str, config_path: str
+    ) -> Tuple[ort.InferenceSession, Dict[str, Any]]:
+        """
+        Load both ONNX model and configuration together
+
+        Returns:
+            (session, config) tuple
+        """
+        session = self.load_model(onnx_path, config_path)
+        config = self.get_config(config_path)
+
+        return session, config
