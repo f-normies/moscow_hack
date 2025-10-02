@@ -12,10 +12,14 @@ def main():
         base = os.path.splitext(os.path.basename(z))[0]
         name = f"{base}-{idx:04d}_0000.nii.gz"
         out = os.path.join(args.output_dir, name)
-        with tempfile.TemporaryDirectory() as tmp:
-            with zipfile.ZipFile(z) as zf:
-                zf.extractall(tmp)
-            dicom2nifti.dicom_series_to_nifti(tmp, out, reorient_nifti=True)
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                with zipfile.ZipFile(z) as zf:
+                    zf.extractall(tmp)
+                dicom2nifti.dicom_series_to_nifti(tmp, out, reorient_nifti=True)
+            print(f"Processed: {z} -> {out}")
+        except Exception as e:
+            print(f"Failed: {z} ({e})")
 
 if __name__ == "__main__":
     main()
