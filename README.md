@@ -105,6 +105,43 @@ python scripts/bulk_inference.py \
 
 Скрипт будет обрабатывать файл-за-файлом. КТ исследования после обработки и соответствующие сегментации будут находиться в `data/results`. Таблица с результатами обработки будет находиться в `data/reports`.
 
+## Использование production модели
+
+Мы не успели доделать инференс модели `multitalent_production`, поэтому в качестве Proof-Of-Concept описание, как инференсить с помощью неё:
+
+1. Установка MultiTalent и настройка окружения:
+
+```
+# Создание окружения
+python -m venv venv
+source venv/bin/activate
+
+# Установка зависимостей
+git clone https://github.com/MIC-DKFZ/MultiTalent.git
+cd multitalent
+pip install .
+pip install dicom2nifti
+
+# Настройка окружения
+mkdir data/studies_nifti
+```
+
+2. Загрузка модели как описано в Quick Start пн. 3
+
+3. Предобработка данных:
+
+```
+python convert_zip_dicom_to_nifti.py -i data/studies -o data/studies_nifti
+```
+
+4. Инференс модели:
+
+```
+multitalent_predict_from_modelfolder -i data/studies_nifti/ -o data/results/ -m models/MultiTalent_trainer__nnUNetResEncUNetLPlansIso1x1x1__3d_fullres/ -f 0
+```
+
+На выходе вы получите бинарные маски для всех датасетов, которые мы использовали при обучении.
+
 ## Структура проекта
 
 ```
