@@ -7,3 +7,7 @@ node_modules/
 .claude/tasks
 temp
 data/models/nnunet_test
+*zip
+*nii.gz
+data/results/processing_log.json
+*xlsx
