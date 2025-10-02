@@ -91,11 +91,11 @@ class Preprocessor:
 
         metadata = {
             "original_shape": original_shape,
-            "original_spacing": original_spacing,
+            "original_spacing": original_spacing,  # (X, Y, Z) order
             "original_origin": original_origin,
             "original_direction": original_direction,
             "bbox": bbox,
-            "target_spacing": target_spacing,
+            "target_spacing": tuple(target_spacing[::-1]),  # Convert (Z,Y,X) to (X,Y,Z) for consistency
             "cropped_shape": cropped_array.shape,
             "resampled_shape": resampled_array.shape,
         }
@@ -289,7 +289,9 @@ class Preprocessor:
         """
         # Convert array to SimpleITK image
         image = sitk.GetImageFromArray(array)
-        image.SetSpacing(original_spacing[::-1])  # ITK uses (Z, Y, X) spacing
+        # original_spacing is already in (X, Y, Z) order from GetSpacing()
+        # GetImageFromArray converts (Z,Y,X) numpy array to (X,Y,Z) SimpleITK image
+        image.SetSpacing(original_spacing)
 
         # Calculate new size
         original_size = image.GetSize()

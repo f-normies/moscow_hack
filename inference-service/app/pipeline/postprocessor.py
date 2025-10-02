@@ -87,28 +87,22 @@ class Postprocessor:
         self, segmentation: np.ndarray, metadata: Dict[str, Any]
     ) -> np.ndarray:
         """Resample segmentation back to original spacing"""
-        # Convert to SimpleITK
+        # Both spacings are now in (X, Y, Z) order for consistency
+        target_spacing = metadata["target_spacing"]  # (X, Y, Z)
+        original_spacing = metadata["original_spacing"]  # (X, Y, Z)
+
+        # Convert to SimpleITK (numpy Z,Y,X → SimpleITK X,Y,Z)
         seg_image = sitk.GetImageFromArray(segmentation)
-        seg_image.SetSpacing(metadata["target_spacing"][::-1])
+        seg_image.SetSpacing(target_spacing)
 
         # Resample to original spacing
         resampler = sitk.ResampleImageFilter()
-        resampler.SetOutputSpacing(metadata["original_spacing"][::-1])
+        resampler.SetOutputSpacing(original_spacing)
 
-        # Calculate output size based on cropped shape
-        cropped_shape = metadata["cropped_shape"]
-        target_spacing = metadata["target_spacing"]
-        original_spacing = metadata["original_spacing"]
-
-        output_size = [
-            int(
-                round(
-                    cropped_shape[2 - i]
-                    * (original_spacing[i] / target_spacing[i])
-                )
-            )
-            for i in range(3)
-        ]
+        # Use cropped_shape from metadata as the target size
+        # This is the shape BEFORE resampling to target_spacing
+        cropped_shape = metadata["cropped_shape"]  # (Z, Y, X)
+        output_size = list(cropped_shape[::-1])  # Convert to (X, Y, Z) for SimpleITK
 
         resampler.SetSize(output_size)
         resampler.SetOutputDirection(seg_image.GetDirection())
