@@ -24,12 +24,12 @@ def seed_models():
     # Define models to seed
     models = [
         {
-            "name": "nnUNet Lung Nodule Segmentation",
+            "name": "nnUNet Test Model",
             "model_type": "nnunet",
             "onnx_path": "nnunet_test/3d_fullres/fold_0/checkpoint_final.onnx",
             "config_path": "nnunet_test/3d_fullres/fold_0/config.json",
             "modality": "CT",
-            "description": "nnUNet model for lung nodule segmentation (Dataset002_Lung_Nodes)",
+            "description": "nnUNet model for lung nodule segmentation",
             "is_active": True
         },
         # Add more models here as they become available

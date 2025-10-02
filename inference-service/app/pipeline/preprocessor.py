@@ -65,14 +65,26 @@ class Preprocessor:
 
         # Handle 4D DICOMs (e.g., multi-frame) by squeezing singleton dimensions
         if image_array.ndim == 4:
+            # Save original 4D metadata before squeezing
+            original_spacing_4d = nifti_image.GetSpacing()  # e.g., (X, Y, Z, T)
+            original_origin_4d = nifti_image.GetOrigin()
+
+            # Squeeze to 3D
             image_array = np.squeeze(image_array)
             logger.info(f"Squeezed 4D DICOM to 3D: {image_array.shape}")
+
+            # Recreate as 3D SimpleITK image with first 3 components of spacing/origin
+            nifti_image = sitk.GetImageFromArray(image_array)
+            nifti_image.SetSpacing(original_spacing_4d[:3])  # Take (X, Y, Z)
+            nifti_image.SetOrigin(original_origin_4d[:3])
+            # Direction will be identity (3x3) by default for new image
+            logger.info(f"Recreated 3D image with spacing {original_spacing_4d[:3]}")
 
         # Ensure we have a 3D volume
         if image_array.ndim != 3:
             raise ValueError(f"Expected 3D image array, got {image_array.ndim}D with shape {image_array.shape}")
 
-        # 4. Store original properties
+        # 4. Store original properties (now guaranteed to be 3D)
         original_spacing = nifti_image.GetSpacing()  # (X, Y, Z)
         original_origin = nifti_image.GetOrigin()
         original_direction = nifti_image.GetDirection()

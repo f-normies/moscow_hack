@@ -20,9 +20,6 @@ services:
       - MODELS_PATH=/models
       - ONNX_PROVIDERS=["CPUExecutionProvider"]
     volumes:
-      - inference-models:/models
+      - ./data/models:/models:ro  # Read-only mount from host
     networks:
       - default
-
-volumes:
-  inference-models:

@@ -1,106 +1,191 @@
-# Web Fullstack Template
+# Хакатон ЛЦТ
 
-## Basic setup
+## Описание
 
-1. Prerequisites:
-    - Python 3.10+
-    - [Node.js](https://docs.npmjs.com/downloading-and-installing-node-js-and-npm)
-    - [Docker](https://docs.docker.com/engine/install/)
-2. Install package managers and misc:
-    - [uv](https://docs.astral.sh/uv/getting-started/installation/) for Python
-    - [npm](https://docs.npmjs.com/downloading-and-installing-node-js-and-npm) for TypeScript and React
-    - [fnm](https://github.com/Schniz/fnm#installation) for Node version managing
-3. Configure backend:
+Данный проект является MVP платформы для анализа и предсказания наличия и местоположении патологии в КТ исследованиях. С технической точки зрения проект представляет из себя микросервисную архитектуру:
+1. Backend - ответственный за предобработку DICOM файлов, их отправку в S3-compatable хранилище, отправку запросов на инференс модели и взаимодействию с PostgreSQL БД
+2. MinIO - self-host решение S3 хранилища, масштабируемо и поддерживаемо
+3. Inference-worker - ONNX runtime, поддерживается как CPU инференс, так и GPU
+4. Celery+redis - организуют поток обработки и очередь КТ исследований для inference-worker
+4. PostgreSQL - база данных, хранит метаданные файлов и прочую информацию
+5. Frontend - базовый, лишь концепт как оно должно было бы выглядеть, реализована аутентификация и отправка на предобработку DICOM файлов, планируется расширение на просмотривальщик КТ исследований после инференса моделей с высокой производительностьей и полный функционал для анализа КТ исследований с инструментами "Линейка", "Зум" и пр.
 
-```bash
-cd backend && uv sync
-```
+## Основные возможности и ограничения
 
-```bash
-source .venv/bin/activate
-```
+Основные возможности описаны в описании и системных требованиях. Ограничения - статус MVP платформы, относительно сырое состояние frontend'а и ограниченная производительность обученной модели (датасеты собирать было очень сложно, из-за этого у нас было мало времени на обучение). 
 
-4. Configure frontend:
+## Системные требования для запуска
 
-```bash
-cd frontend && fnm install
-```
+Проект был запущен на конфигурации средней мощности и успешно работал, поэтому, данную конфигурацию можно называть "рекомендуемой" (или "минимальной", вопрос семантики):
 
-```bash
-fnm use
-```
+1. CPU: Ryzen 5 5600x (6c/12t)
+2. GPU: RTX 2070 (8Gb VRAM)
+3. RAM: 32Gb DDR4
 
-```bash
-npm install
-```
+## Quick Start
 
-5. Configure MinIO:
-
-```bash
-sudo nano /etc/hosts
-```
-
-```txt
-127.0.0.1       minio
-```
-
-Note: Correctly proxying MinIO to localhost was a MASSIVE pain in the ass. Just use this to overcome the problems.
-
-6. Read [backend/README.md](./backend/README.md) and [frontend/README.md](./frontend/README.md) for development guidelines!
-
-Use these credentials to check services:
+1. Сборка и запуск контейнеров (ПРИ НАЛИЧИИ ТОЛЬКО CPU МЕНЯЕМ `docker-compose.gpu.yml` на `docker-compose.cpu.yml`)
 
 ```
-Backend Admin Login
-  - Email: admin@webapp.com
-  - Password: GYSgmXnhFR3p7-4x-2D21A
-
-MinIO Storage Credentials
-
-  Root Admin Access (Console)
-  - Username: minio
-  - Password: KaAsm5IXs--CrKeEFILGkA
-
-  Application Service Access
-  - Access Key: app-service-minio
-  - Secret Key: 9f0jReES1fs8Bj_XoF7ViPAKB1k
-
+docker compose -f docker-compose.yml -f docker-compose.override.yml -f docker-compose.gpu.yml build
+docker compose -f docker-compose.yml -f docker-compose.override.yml -f docker-compose.gpu.yml up -d
 ```
 
-## Technology Stack and Features
+2. Проверка конфигурации
 
-- ⚡ [**FastAPI**](https://fastapi.tiangolo.com) for the Python backend API.
-    - 🧰 [SQLModel](https://sqlmodel.tiangolo.com) for the Python SQL database interactions (ORM).
-    - 🔍 [Pydantic](https://docs.pydantic.dev), used by FastAPI, for the data validation and settings management.
-    - 💾 [PostgreSQL](https://www.postgresql.org) as the SQL database.
-- 🚀 [React](https://react.dev) for the frontend.
-    - 💃 Using TypeScript, hooks, Vite, and other parts of a modern frontend stack.
-    - 🎨 [Chakra UI](https://chakra-ui.com) for the frontend components.
-    - 🤖 An automatically generated frontend client.
-    - 🧪 [Playwright](https://playwright.dev) for End-to-End testing.
-    - 🦇 Dark mode support.
-- 🐋 [Docker Compose](https://www.docker.com) for development and production.
-- 🔒 Secure password hashing by default.
-- 🔑 JWT (JSON Web Token) authentication.
-- 📫 Email based password recovery.
-- ✅ Tests with [Pytest](https://pytest.org).
-- 📞 [Traefik](https://traefik.io) as a reverse proxy / load balancer.
-- 🚢 Deployment instructions using Docker Compose, including how to set up a frontend Traefik proxy to handle automatic HTTPS certificates.
+```
+Frontend: http://localhost:5173
+Backend: http://localhost:8000
+Automatic Interactive Docs (Swagger UI): http://localhost:8000/docs
+Automatic Alternative Docs (ReDoc): http://localhost:8000/redoc
+Adminer: http://localhost:8080
+Traefik UI: http://localhost:8090
+MailCatcher: http://localhost:1080
+MinIO: http://localhost:9001
+```
 
-## Backend Development
+Для аутентификации используйте данные из .env:
 
-Backend docs: [backend/README.md](./backend/README.md).
+```
+FIRST_SUPERUSER=admin@webapp.com
+FIRST_SUPERUSER_PASSWORD=GYSgmXnhFR3p7-4x-2D21A
 
-## Frontend Development
+MINIO_ROOT_USER=minio
+MINIO_ROOT_PASSWORD=KaAsm5IXs--CrKeEFILGkA
+```
 
-Frontend docs: [frontend/README.md](./frontend/README.md).
+3. Загрузка моделей:
 
-## Deployment
+```
+По данной ссылке доступны тестовая модель (nnunet_test) и рабочая модель (multitalent_production): 
 
-Deployment docs: [deployment.md](./deployment.md).
+https://drive.google.com/drive/folders/1SZrMc-2sJCuOprVL_7XcJhZn20O0MaqU?usp=sharing
 
-## Development
+Загрузите их и распакуйте в `data/models`. Итоговая файловая структура должна выглядеть следующим образом:
+data/models
+├── nnunet_test
+│   └── 3d_fullres
+│       └── fold_0
+│           ├── checkpoint_final.onnx
+│           └── config.json
+├── multitalent_production
+│   └── 3d_fullres
+│       └── fold_0
+│           ├── checkpoint_final.onnx
+│           └── config.json
+```
 
-General development docs: [development.md](./development.md).
+4. Добавление доступных моделей для инференса в PostgreSQL:
 
-This includes using Docker Compose, custom local domains, `.env` configurations, etc.
+```
+docker compose exec backend python scripts/seed_inference_models.py
+```
+
+5. Загрузка данных для bulk inference в `data/studies` (ДАННЫЕ ДОЛЖНЫ БЫТЬ В ФОРМАТЕ .zip)
+
+6. Создание виртуального окружения и установка зависимостей для bulk inference (тестировалось на Python 3.10):
+
+```
+cd scripts
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+7. Запуск bulk inference:
+
+```
+cd ..
+python scripts/bulk_inference.py \
+    --email admin@webapp.com \
+    --password GYSgmXnhFR3p7-4x-2D21A \
+    --studies-dir data/studies \
+    --output-dir data/results
+```
+
+Скрипт будет обрабатывать файл-за-файлом. КТ исследования после обработки и соответствующие сегментации будут находиться в `data/results`. Таблица с результатами обработки будет находиться в `data/reports`.
+
+## Структура проекта
+
+```
+.
+├── backend
+│   ├── alembic.ini
+│   ├── app
+│   ├── Dockerfile
+│   ├── htmlcov
+│   ├── pyproject.toml
+│   ├── README.md
+│   ├── scripts
+│   └── uv.lock
+├── data
+│   ├── models
+│   ├── reports
+│   ├── results
+│   └── studies
+├── deployment.md
+├── development.md
+├── docker-compose.cpu.yml
+├── docker-compose.gpu.yml
+├── docker-compose.override.yml
+├── docker-compose.traefik.yml
+├── docker-compose.yml
+├── frontend
+│   ├── biome.json
+│   ├── blob-report
+│   ├── Dockerfile
+│   ├── Dockerfile.playwright
+│   ├── index.html
+│   ├── nginx-backend-not-found.conf
+│   ├── nginx.conf
+│   ├── node_modules
+│   ├── openapi.json
+│   ├── openapi-ts.config.ts
+│   ├── openapi-ts-error-1758492555431.log
+│   ├── package.json
+│   ├── package-lock.json
+│   ├── playwright.config.ts
+│   ├── public
+│   ├── README.md
+│   ├── src
+│   ├── test-results
+│   ├── tests
+│   ├── tsconfig.build.json
+│   ├── tsconfig.json
+│   ├── tsconfig.node.json
+│   └── vite.config.ts
+├── inference-service
+│   ├── app
+│   ├── Dockerfile.cpu
+│   ├── Dockerfile.gpu
+│   ├── pyproject.cpu.toml
+│   ├── pyproject.toml
+│   ├── README.md
+│   ├── uv.cpu.lock
+│   └── uv.lock
+├── old_readme.md
+├── README.md
+├── scripts
+│   ├── build-push.sh
+│   ├── build.sh
+│   ├── bulk_inference.py
+│   ├── cleanup_incomplete_studies.py
+│   ├── deploy.sh
+│   ├── generate-client.sh
+│   ├── __pycache__
+│   ├── README_BULK_INFERENCE.md
+│   ├── report_generator.py
+│   ├── requirements.txt
+│   ├── test-local.sh
+│   └── test.sh
+├── temp
+│   ├── entry_points.py
+│   ├── inference
+│   ├── onnx_export.py
+│   ├── postprocessing
+│   ├── preprocessing
+│   └── venv
+└── tooling.md
+
+26 directories, 54 files
+```
