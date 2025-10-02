@@ -134,6 +134,9 @@ class Preprocessor:
                 )
             )
 
+        # Order by instance number for proper slice ordering
+        query = query.order_by(DICOMMetadata.instance_number)
+
         results = session.exec(query).all()
 
         dicom_files = []
@@ -149,9 +152,29 @@ class Preprocessor:
         return dicom_files
 
     def _dicom_to_nifti(self, dicom_files: List[Path]) -> sitk.Image:
-        """Convert DICOM series to NIfTI using SimpleITK"""
+        """
+        Convert DICOM series to NIfTI using SimpleITK
+
+        Uses GDCM to properly sort slices by Image Position Patient
+        for correct anatomical ordering.
+        """
         reader = sitk.ImageSeriesReader()
-        reader.SetFileNames([str(f) for f in dicom_files])
+
+        # Use GDCM to properly sort DICOM slices by spatial position
+        # This is more robust than relying on instance numbers
+        series_dir = str(dicom_files[0].parent)
+        series_IDs = reader.GetGDCMSeriesIDs(series_dir)
+
+        if not series_IDs:
+            # Fallback: use files as provided (already sorted by instance_number)
+            logger.warning("GDCM couldn't find series, using instance_number ordering")
+            reader.SetFileNames([str(f) for f in dicom_files])
+        else:
+            # Use GDCM-sorted filenames (reads DICOM headers for Image Position Patient)
+            dicom_names = reader.GetGDCMSeriesFileNames(series_dir, series_IDs[0])
+            reader.SetFileNames(dicom_names)
+            logger.info(f"Using GDCM sorting for {len(dicom_names)} DICOM files")
+
         image = reader.Execute()
 
         logger.info(
