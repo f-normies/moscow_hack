@@ -20,7 +20,7 @@ services:
       - MODELS_PATH=/models
       - ONNX_PROVIDERS=["CUDAExecutionProvider","CPUExecutionProvider"]
     volumes:
-      - inference-models:/models
+      - ./data/models:/models:ro  # Read-only mount from host
     networks:
       - default
     deploy:
@@ -30,6 +30,3 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
-
-volumes:
-  inference-models:
