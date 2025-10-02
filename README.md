@@ -155,6 +155,7 @@ multitalent_predict_from_modelfolder -i data/studies_nifti/ -o data/results/ -m 
 │   ├── README.md
 │   ├── scripts
 │   └── uv.lock
+├── CLAUDE.md
 ├── data
 │   ├── models
 │   ├── reports
@@ -207,6 +208,7 @@ multitalent_predict_from_modelfolder -i data/studies_nifti/ -o data/results/ -m 
 │   ├── build.sh
 │   ├── bulk_inference.py
 │   ├── cleanup_incomplete_studies.py
+│   ├── convert_zip_dicom_to_nifti.py
 │   ├── deploy.sh
 │   ├── generate-client.sh
 │   ├── __pycache__
@@ -222,7 +224,8 @@ multitalent_predict_from_modelfolder -i data/studies_nifti/ -o data/results/ -m 
 │   ├── postprocessing
 │   ├── preprocessing
 │   └── venv
+├── TESTING_EXCEL_REPORTS.md
 └── tooling.md
 
-26 directories, 54 files
+26 directories, 55 files
 ```
