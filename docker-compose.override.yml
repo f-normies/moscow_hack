@@ -61,12 +61,17 @@ services:
       - "9000:9000"  # MinIO API
       - "9001:9001"  # MinIO Console
 
+  # prestart:
+  #   build:
+      # network: host
+
   backend:
     restart: "no"
     ports:
       - "8000:8000"
     build:
       context: ./backend
+      # network: host
     # command: sleep infinity  # Infinite loop to keep container alive doing nothing
     command:
       - fastapi
@@ -104,6 +109,7 @@ services:
       - "5173:80"
     build:
       context: ./frontend
+      # network: host
       args:
         - VITE_API_URL=http://localhost:8000
         - NODE_ENV=development
@@ -112,6 +118,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile.playwright
+      # network: host
       args:
         - VITE_API_URL=http://backend:8000
         - NODE_ENV=production

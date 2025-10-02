@@ -1,0 +1,44 @@
+[project]
+name = "inference-service"
+version = "0.1.0"
+description = "AI inference microservice for medical image segmentation"
+requires-python = ">=3.10,<4.0"
+dependencies = [
+    # Core inference
+    "torch>=2.1.0",
+    "onnx>=1.15.0",
+    "onnxruntime>=1.16.0",
+    "numpy>=1.24.0",
+    "scipy>=1.11.0",
+
+    # Medical imaging
+    "SimpleITK>=2.3.0",
+    "nibabel>=5.1.0",
+    "pydicom>=2.4.0",
+
+    # Image processing
+    "scikit-image>=0.22.0",
+
+    # Task queue
+    "celery>=5.3.0",
+    "redis>=5.0.0",
+
+    # Storage
+    "minio>=7.2.0",
+
+    # Database
+    "sqlmodel>=0.0.14",
+    "psycopg[binary]>=3.1.0",
+
+    # Utilities
+    "tqdm>=4.66.0",
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.1.0",
+]
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.1.0",
+]
