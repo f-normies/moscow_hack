@@ -379,6 +379,7 @@ class InferenceJobsPublic(SQLModel):
 class SegmentationResultBase(SQLModel):
     output_format: str = Field(max_length=50)  # "nifti", "dicom-seg"
     file_path: str = Field(max_length=500)
+    source_image_path: str | None = Field(default=None, max_length=500)  # Path to processed CT
     classes: Dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
     result_metadata: Dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
 

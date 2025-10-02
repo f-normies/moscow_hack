@@ -140,7 +140,7 @@ def run_inference_task(self, job_id_str: str) -> Dict[str, Any]:
 
             # Postprocess
             logger.info(f"Postprocessing results for job {job_id}")
-            result_path, metrics = self.postprocessor.process(
+            seg_path, ct_path, metrics = self.postprocessor.process(
                 predictions=predictions,
                 preprocessed_metadata=preprocessed_data["metadata"],
                 output_format=job.parameters.get("output_format", "nifti")
@@ -159,7 +159,8 @@ def run_inference_task(self, job_id_str: str) -> Dict[str, Any]:
                 output_format=job.parameters.get("output_format", "nifti")
                 if job.parameters
                 else "nifti",
-                file_path=result_path,
+                file_path=seg_path,
+                source_image_path=ct_path,
                 classes=metrics.get("classes", {}),
                 result_metadata=metrics,
             )
@@ -169,7 +170,7 @@ def run_inference_task(self, job_id_str: str) -> Dict[str, Any]:
             job.status = "completed"
             job.completed_at = datetime.utcnow()
             job.progress = 1.0
-            job.result_path = result_path
+            job.result_path = seg_path
             job.metrics = metrics
             session.add(job)
             session.commit()

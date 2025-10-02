@@ -163,6 +163,46 @@ async def download_inference_result(
         raise HTTPException(status_code=500, detail="Failed to download result")
 
 
+@router.get("/jobs/{job_id}/download-ct")
+async def download_processed_ct(
+    *,
+    session: SessionDep,
+    current_user: CurrentUser,
+    job_id: uuid.UUID,
+):
+    """
+    Download processed original CT image aligned with segmentation
+    """
+    try:
+        result = await inference_service.get_job_result(
+            job_id=job_id, user_id=current_user.id, session=session
+        )
+
+        if not result:
+            raise HTTPException(status_code=404, detail="Result not found")
+
+        if not result.source_image_path:
+            raise HTTPException(
+                status_code=404, detail="Source CT image not available for this result"
+            )
+
+        # Get presigned download URL from MinIO
+        download_url = await minio_service.get_presigned_download_url(
+            result.source_image_path
+        )
+
+        # Redirect to presigned URL
+        return RedirectResponse(url=download_url)
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error downloading CT image: {e}")
+        raise HTTPException(status_code=500, detail="Failed to download CT image")
+
+
 @router.delete("/jobs/{job_id}", response_model=Message)
 async def cancel_inference_job(
     *,

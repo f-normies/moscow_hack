@@ -33,7 +33,7 @@ class Postprocessor:
         output_format: str,
         job_id: uuid.UUID,
         model_config: Dict[str, Any],
-    ) -> Tuple[str, Dict[str, Any]]:
+    ) -> Tuple[str, str, Dict[str, Any]]:
         """
         Postprocess predictions and upload to MinIO
 
@@ -45,7 +45,7 @@ class Postprocessor:
             model_config: Model configuration from config.json
 
         Returns:
-            (minio_path, metrics)
+            (segmentation_path, source_ct_path, metrics)
         """
         # 1. Convert logits to segmentation mask
         segmentation = self._logits_to_segmentation(predictions)
@@ -63,16 +63,22 @@ class Postprocessor:
         # TODO: Support multiple config formats for class names
         metrics = self._calculate_metrics(restored_seg, model_config)
 
-        # 6. Convert to output format
-        output_path = self._convert_to_format(
-            restored_seg, preprocessed_metadata, output_format, job_id
+        # 6. Convert segmentation to output format
+        seg_output_path = self._convert_to_format(
+            restored_seg, preprocessed_metadata, output_format, job_id, suffix="_seg"
         )
 
-        # 7. Upload to MinIO
-        minio_path = self._upload_to_minio(output_path, job_id)
+        # 7. Save processed source CT image
+        ct_output_path = self._save_processed_ct(
+            preprocessed_metadata, job_id
+        )
 
-        logger.info(f"Postprocessing complete: {minio_path}")
-        return minio_path, metrics
+        # 8. Upload both to MinIO
+        seg_minio_path = self._upload_to_minio(seg_output_path, job_id, "segmentation")
+        ct_minio_path = self._upload_to_minio(ct_output_path, job_id, "source_ct")
+
+        logger.info(f"Postprocessing complete: seg={seg_minio_path}, ct={ct_minio_path}")
+        return seg_minio_path, ct_minio_path, metrics
 
     def _logits_to_segmentation(self, logits: np.ndarray) -> np.ndarray:
         """Convert logits to segmentation mask (argmax)"""
@@ -244,12 +250,13 @@ class Postprocessor:
         metadata: Dict[str, Any],
         output_format: str,
         job_id: uuid.UUID,
+        suffix: str = "",
     ) -> Path:
         """Convert segmentation to output format"""
         temp_dir = Path(tempfile.mkdtemp(prefix=f"result_{job_id}_"))
 
         if output_format == "nifti":
-            output_path = temp_dir / f"{job_id}.nii.gz"
+            output_path = temp_dir / f"{job_id}{suffix}.nii.gz"
 
             # Convert to SimpleITK image
             image = sitk.GetImageFromArray(segmentation)
@@ -262,7 +269,7 @@ class Postprocessor:
 
         elif output_format == "dicom-seg":
             # TODO: Implement DICOM-SEG export using pydicom-seg
-            output_path = temp_dir / f"{job_id}.dcm"
+            output_path = temp_dir / f"{job_id}{suffix}.dcm"
             raise NotImplementedError("DICOM-SEG export not yet implemented")
 
         else:
@@ -271,7 +278,43 @@ class Postprocessor:
         logger.info(f"Converted to {output_format}: {output_path}")
         return output_path
 
-    def _upload_to_minio(self, file_path: Path, job_id: uuid.UUID) -> str:
+    def _save_processed_ct(
+        self, metadata: Dict[str, Any], job_id: uuid.UUID
+    ) -> Path:
+        """
+        Save processed original CT image
+
+        Creates NIfTI file with same geometric properties as segmentation
+        for perfect alignment in visualization tools.
+
+        Args:
+            metadata: Preprocessing metadata containing original_image
+            job_id: Job identifier
+
+        Returns:
+            Path to saved CT NIfTI file
+        """
+        temp_dir = Path(tempfile.mkdtemp(prefix=f"ct_{job_id}_"))
+        output_path = temp_dir / f"{job_id}_ct.nii.gz"
+
+        # Get original image from metadata
+        original_image = metadata["original_image"]
+
+        # Convert to SimpleITK image with same properties as segmentation
+        ct_image = sitk.GetImageFromArray(original_image)
+        ct_image.SetSpacing(metadata["original_spacing"][::-1])  # Convert to X,Y,Z
+        ct_image.SetOrigin(metadata["original_origin"])
+        ct_image.SetDirection(metadata["original_direction"])
+
+        # Save as NIfTI
+        sitk.WriteImage(ct_image, str(output_path), useCompression=True)
+
+        logger.info(f"Saved processed CT: {output_path}, shape={original_image.shape}")
+        return output_path
+
+    def _upload_to_minio(
+        self, file_path: Path, job_id: uuid.UUID, file_type: str = "result"
+    ) -> str:
         """Upload result to MinIO"""
         object_name = f"inference_results/{job_id}/{file_path.name}"
 
@@ -279,5 +322,5 @@ class Postprocessor:
             settings.MINIO_BUCKET_NAME, object_name, str(file_path)
         )
 
-        logger.info(f"Uploaded to MinIO: {object_name}")
+        logger.info(f"Uploaded {file_type} to MinIO: {object_name}")
         return object_name

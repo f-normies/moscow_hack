@@ -291,6 +291,35 @@ class MinIOService:
 
         return file_metadata
 
+    @handle_minio_errors
+    async def get_presigned_download_url(
+        self, minio_path: str, expiry_hours: int = 1
+    ) -> str:
+        """
+        Generate presigned URL for MinIO object path
+
+        This method is for inference results and other objects that don't have
+        FileMetadata entries. For user files, use generate_presigned_url instead.
+
+        Args:
+            minio_path: Direct path to object in MinIO
+            expiry_hours: URL expiration time in hours
+
+        Returns:
+            Presigned download URL
+        """
+
+        def _generate_url():
+            return self.client.presigned_get_object(
+                bucket_name=self.bucket_name,
+                object_name=minio_path,
+                expires=timedelta(hours=expiry_hours),
+            )
+
+        url = await asyncio.to_thread(_generate_url)
+        logger.info(f"\tPresigned URL generated for path: {minio_path}")
+        return url
+
     async def health_check(self) -> dict[str, Any]:
         """Check MinIO service health"""
         try:

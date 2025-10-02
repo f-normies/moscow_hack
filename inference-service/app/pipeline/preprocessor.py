@@ -98,6 +98,7 @@ class Preprocessor:
             "target_spacing": tuple(target_spacing[::-1]),  # Convert (Z,Y,X) to (X,Y,Z) for consistency
             "cropped_shape": cropped_array.shape,
             "resampled_shape": resampled_array.shape,
+            "original_image": image_array,  # Include original CT for postprocessing
         }
 
         logger.info(
