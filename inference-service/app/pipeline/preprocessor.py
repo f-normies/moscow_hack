@@ -61,7 +61,16 @@ class Preprocessor:
         nifti_image = self._dicom_to_nifti(dicom_files)
 
         # 3. Get image as numpy array
-        image_array = sitk.GetArrayFromImage(nifti_image)  # Shape: (Z, Y, X)
+        image_array = sitk.GetArrayFromImage(nifti_image)  # Shape: (Z, Y, X) or possibly (Z, Y, X, 1)
+
+        # Handle 4D DICOMs (e.g., multi-frame) by squeezing singleton dimensions
+        if image_array.ndim == 4:
+            image_array = np.squeeze(image_array)
+            logger.info(f"Squeezed 4D DICOM to 3D: {image_array.shape}")
+
+        # Ensure we have a 3D volume
+        if image_array.ndim != 3:
+            raise ValueError(f"Expected 3D image array, got {image_array.ndim}D with shape {image_array.shape}")
 
         # 4. Store original properties
         original_spacing = nifti_image.GetSpacing()  # (X, Y, Z)
@@ -139,6 +148,13 @@ class Preprocessor:
 
         results = session.exec(query).all()
 
+        # Log query results for debugging
+        if not results:
+            logger.warning(
+                f"No DICOM metadata found in database for study_id={study_id}, series_id={series_id}. "
+                "Study was uploaded but metadata extraction may have failed."
+            )
+
         dicom_files = []
         for dicom_meta, file_meta in results:
             # Download from MinIO
@@ -158,6 +174,17 @@ class Preprocessor:
         Uses GDCM to properly sort slices by Image Position Patient
         for correct anatomical ordering.
         """
+        # Check if DICOM files list is empty
+        if not dicom_files:
+            raise ValueError(
+                "No DICOM files found for this study/series. "
+                "This may occur if: "
+                "(1) Study metadata exists but files failed to upload to MinIO, "
+                "(2) Series has no associated DICOM instances, "
+                "(3) Database query failed to find metadata records. "
+                "Please check MinIO storage and database integrity."
+            )
+
         reader = sitk.ImageSeriesReader()
 
         # Use GDCM to properly sort DICOM slices by spatial position

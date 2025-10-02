@@ -1,0 +1,17 @@
+# Requirements for bulk inference and report generation scripts
+
+# HTTP client
+requests>=2.31.0
+
+# Excel file generation
+openpyxl>=3.1.0
+
+# Medical image processing
+SimpleITK>=2.3.0
+numpy>=1.24.0
+
+# MinIO storage access
+minio>=7.2.0
+
+# Progress bars (optional, for better UX)
+tqdm>=4.66.0

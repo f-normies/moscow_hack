@@ -26,6 +26,13 @@ from typing import Optional, Dict, List
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+from minio import Minio
+
+from report_generator import (
+    ExcelReportGenerator,
+    determine_pathology,
+    calculate_pathology_bbox,
+)
 
 # Configure logging
 logging.basicConfig(
@@ -42,7 +49,11 @@ class BulkInferenceClient:
         self,
         base_url: str = "http://localhost:8000",
         email: str = None,
-        password: str = None
+        password: str = None,
+        minio_endpoint: str = "minio:9000",
+        minio_access_key: str = "app-service-minio",
+        minio_secret_key: str = "9f0jReES1fs8Bj_XoF7ViPAKB1k",
+        minio_bucket: str = "user-files",  # Bucket containing inference_results/
     ):
         self.base_url = base_url.rstrip('/')
         self.email = email
@@ -60,6 +71,15 @@ class BulkInferenceClient:
         adapter = HTTPAdapter(max_retries=retry_strategy)
         self.session.mount("http://", adapter)
         self.session.mount("https://", adapter)
+
+        # MinIO client for bounding box calculation
+        self.minio_client = Minio(
+            minio_endpoint,
+            access_key=minio_access_key,
+            secret_key=minio_secret_key,
+            secure=False,
+        )
+        self.minio_bucket = minio_bucket
 
     def authenticate(self) -> bool:
         """Authenticate with backend and get access token"""
@@ -172,6 +192,34 @@ class BulkInferenceClient:
 
         except requests.exceptions.RequestException as e:
             logger.error(f"✗ Failed to get job status: {e}")
+            return None
+
+    def get_study_details(self, study_id: str) -> Optional[Dict]:
+        """Get full study details including DICOM UIDs"""
+        try:
+            response = self.session.get(
+                f"{self.base_url}/api/v1/dicom/studies/{study_id}",
+                headers=self._get_headers()
+            )
+            response.raise_for_status()
+            return response.json()
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"✗ Failed to get study details: {e}")
+            return None
+
+    def get_job_result(self, job_id: str) -> Optional[Dict]:
+        """Get inference job result with metrics"""
+        try:
+            response = self.session.get(
+                f"{self.base_url}/api/v1/inference/jobs/{job_id}/result",
+                headers=self._get_headers()
+            )
+            response.raise_for_status()
+            return response.json()
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"✗ Failed to get job result: {e}")
             return None
 
     def wait_for_job(self, job_id: str, timeout: int = 3600, poll_interval: int = 5) -> Optional[Dict]:
@@ -330,6 +378,10 @@ Examples:
 
     logger.info(f"Found {len(zip_files)} DICOM ZIP files")
 
+    # Initialize Excel report generator
+    report_generator = ExcelReportGenerator()
+    logger.info("Initialized Excel report generator")
+
     # Process each study
     results = []
     for i, zip_file in enumerate(zip_files, 1):
@@ -337,43 +389,166 @@ Examples:
         logger.info(f"Processing {i}/{len(zip_files)}: {zip_file.name}")
         logger.info(f"{'='*60}")
 
-        # Upload study
-        study = client.upload_dicom_zip(zip_file)
-        if not study:
-            logger.error(f"Skipping {zip_file.name} due to upload failure")
-            continue
+        # Start timing for this study
+        start_time = time.time()
 
-        # Submit inference
-        job = client.submit_inference(
-            study_id=study['id'],
-            model_id=selected_model['id']
-        )
-        if not job:
-            logger.error(f"Skipping {zip_file.name} due to inference submission failure")
-            continue
+        try:
+            # Upload study
+            study = client.upload_dicom_zip(zip_file)
+            if not study:
+                logger.error(f"Skipping {zip_file.name} due to upload failure")
+                elapsed_time = time.time() - start_time
+                report_generator.add_study_result(
+                    path_to_study=str(zip_file),
+                    study_uid="unknown",
+                    series_uid="unknown",
+                    probability_of_pathology=0.0,
+                    pathology=0,
+                    processing_status="Failure",
+                    time_of_processing=elapsed_time,
+                    pathology_localization="",
+                )
+                continue
 
-        # Wait for completion
-        final_job = client.wait_for_job(job['id'])
-        if final_job and final_job['status'] == 'completed':
-            # Download results
-            client.download_result(
-                job['id'],
-                args.output_dir / zip_file.stem,
-                download_ct=not args.no_download_ct
+            # Get full study details with DICOM UIDs
+            study_details = client.get_study_details(study['id'])
+            if not study_details:
+                logger.error(f"Failed to get study details for {zip_file.name}")
+                elapsed_time = time.time() - start_time
+                report_generator.add_study_result(
+                    path_to_study=str(zip_file),
+                    study_uid="unknown",
+                    series_uid="unknown",
+                    probability_of_pathology=0.0,
+                    pathology=0,
+                    processing_status="Failure",
+                    time_of_processing=elapsed_time,
+                    pathology_localization="",
+                )
+                continue
+
+            # Submit inference
+            job = client.submit_inference(
+                study_id=study['id'],
+                model_id=selected_model['id']
             )
-            results.append({
-                'zip_file': zip_file.name,
-                'study_id': study['id'],
-                'job_id': job['id'],
-                'status': 'success'
-            })
-        else:
-            results.append({
-                'zip_file': zip_file.name,
-                'study_id': study.get('id', 'unknown'),
-                'job_id': job.get('id', 'unknown'),
-                'status': 'failed'
-            })
+            if not job:
+                logger.error(f"Skipping {zip_file.name} due to inference submission failure")
+                elapsed_time = time.time() - start_time
+                report_generator.add_study_result(
+                    path_to_study=str(zip_file),
+                    study_uid=study_details.get('study_instance_uid', 'unknown'),
+                    series_uid=study_details.get('series', [{}])[0].get('series_instance_uid', 'unknown'),
+                    probability_of_pathology=0.0,
+                    pathology=0,
+                    processing_status="Failure",
+                    time_of_processing=elapsed_time,
+                    pathology_localization="",
+                )
+                continue
+
+            # Wait for completion
+            final_job = client.wait_for_job(job['id'])
+            elapsed_time = time.time() - start_time
+
+            if final_job and final_job['status'] == 'completed':
+                # Download results
+                client.download_result(
+                    job['id'],
+                    args.output_dir / zip_file.stem,
+                    download_ct=not args.no_download_ct
+                )
+
+                # Get result with metrics
+                result = client.get_job_result(job['id'])
+                if not result:
+                    logger.error(f"Failed to get result metrics for job {job['id']}")
+                    report_generator.add_study_result(
+                        path_to_study=str(zip_file),
+                        study_uid=study_details.get('study_instance_uid', 'unknown'),
+                        series_uid=study_details.get('series', [{}])[0].get('series_instance_uid', 'unknown'),
+                        probability_of_pathology=0.0,
+                        pathology=0,
+                        processing_status="Failure",
+                        time_of_processing=elapsed_time,
+                        pathology_localization="",
+                    )
+                    continue
+
+                # Determine pathology from metrics
+                metrics = final_job.get('metrics', {})
+                probability, pathology = determine_pathology(metrics)
+
+                # Calculate bounding box if pathology exists
+                bbox = ""
+                if pathology == 1 and result.get('file_path'):
+                    bbox = calculate_pathology_bbox(
+                        result['file_path'],
+                        client.minio_client,
+                        client.minio_bucket
+                    )
+
+                # Add successful result to report
+                report_generator.add_study_result(
+                    path_to_study=str(zip_file),
+                    study_uid=study_details.get('study_instance_uid', 'unknown'),
+                    series_uid=study_details.get('series', [{}])[0].get('series_instance_uid', 'unknown'),
+                    probability_of_pathology=probability,
+                    pathology=pathology,
+                    processing_status="Success",
+                    time_of_processing=elapsed_time,
+                    pathology_localization=bbox,
+                )
+
+                results.append({
+                    'zip_file': zip_file.name,
+                    'study_id': study['id'],
+                    'job_id': job['id'],
+                    'status': 'success'
+                })
+            else:
+                # Failed inference
+                report_generator.add_study_result(
+                    path_to_study=str(zip_file),
+                    study_uid=study_details.get('study_instance_uid', 'unknown'),
+                    series_uid=study_details.get('series', [{}])[0].get('series_instance_uid', 'unknown'),
+                    probability_of_pathology=0.0,
+                    pathology=0,
+                    processing_status="Failure",
+                    time_of_processing=elapsed_time,
+                    pathology_localization="",
+                )
+
+                results.append({
+                    'zip_file': zip_file.name,
+                    'study_id': study.get('id', 'unknown'),
+                    'job_id': job.get('id', 'unknown'),
+                    'status': 'failed'
+                })
+
+        except Exception as e:
+            logger.error(f"Unexpected error processing {zip_file.name}: {e}")
+            elapsed_time = time.time() - start_time
+            report_generator.add_study_result(
+                path_to_study=str(zip_file),
+                study_uid="unknown",
+                series_uid="unknown",
+                probability_of_pathology=0.0,
+                pathology=0,
+                processing_status="Failure",
+                time_of_processing=elapsed_time,
+                pathology_localization="",
+            )
+
+    # Generate Excel report
+    logger.info(f"\n{'='*60}")
+    logger.info("GENERATING EXCEL REPORT")
+    logger.info(f"{'='*60}")
+
+    reports_dir = Path('data/reports')
+    report_path = report_generator.generate_report(reports_dir)
+
+    logger.info(f"✓ Excel report generated: {report_path}")
 
     # Summary
     logger.info(f"\n{'='*60}")
@@ -388,7 +563,8 @@ Examples:
     results_log.parent.mkdir(parents=True, exist_ok=True)
     with open(results_log, 'w') as f:
         json.dump(results, f, indent=2)
-    logger.info(f"\nResults log saved to: {results_log}")
+    logger.info(f"\nJSON log saved to: {results_log}")
+    logger.info(f"Excel report saved to: {report_path}")
 
 
 if __name__ == '__main__':

@@ -1,6 +1,6 @@
 # Bulk Inference Script
 
-Automated script for processing multiple DICOM studies through the inference pipeline.
+Automated script for processing multiple DICOM studies through the inference pipeline and generating Excel reports for pathology classification.
 
 ## Setup
 
@@ -11,8 +11,15 @@ Automated script for processing multiple DICOM studies through the inference pip
 
 2. **Install Python dependencies:**
    ```bash
-   pip install requests
+   pip install -r scripts/requirements.txt
    ```
+
+   Dependencies include:
+   - `requests` - HTTP client for API communication
+   - `openpyxl` - Excel file generation
+   - `SimpleITK` - Medical image processing
+   - `numpy` - Numerical computations
+   - `minio` - MinIO storage access
 
 3. **Prepare DICOM studies:**
    - Place DICOM ZIP files in `data/studies/`
@@ -66,15 +73,35 @@ python scripts/bulk_inference.py \
 Results are organized by study:
 
 ```
-data/results/
-├── study_001/
-│   ├── {job_id}_segmentation.nii.gz
-│   └── {job_id}_ct.nii.gz
-├── study_002/
-│   ├── {job_id}_segmentation.nii.gz
-│   └── {job_id}_ct.nii.gz
-└── processing_log.json
+data/
+├── results/
+│   ├── study_001/
+│   │   ├── {job_id}_segmentation.nii.gz
+│   │   └── {job_id}_ct.nii.gz
+│   ├── study_002/
+│   │   ├── {job_id}_segmentation.nii.gz
+│   │   └── {job_id}_ct.nii.gz
+│   └── processing_log.json
+└── reports/
+    └── report_{timestamp}_{uuid}.xlsx  # Excel pathology classification report
 ```
+
+### Excel Report
+
+Each run generates an Excel report in `data/reports/` containing:
+
+| Column | Description |
+|--------|-------------|
+| `path_to_study` | Path to DICOM study ZIP file |
+| `study_uid` | StudyInstanceUID from DICOM |
+| `series_uid` | SeriesInstanceUID from DICOM |
+| `probability_of_pathology` | 0.0 (normal) or 1.0 (pathology) |
+| `pathology` | Binary indicator (0 or 1) |
+| `processing_status` | "Success" or "Failure" |
+| `time_of_processing` | Processing time in seconds |
+| `pathology_localization` | 3D bounding box (x_min,x_max,y_min,y_max,z_min,z_max) |
+
+See `data/reports/README.md` for detailed report documentation.
 
 ## Features
 
@@ -83,6 +110,10 @@ data/results/
 - ✅ Retry logic for failed requests
 - ✅ Parallel processing support (processes studies sequentially, but can run multiple script instances)
 - ✅ Downloads both segmentation and aligned CT
+- ✅ **Excel report generation** with pathology classification
+- ✅ **DICOM UID extraction** (StudyInstanceUID, SeriesInstanceUID)
+- ✅ **Processing time tracking** for each study
+- ✅ **3D bounding box calculation** for detected pathologies
 - ✅ Comprehensive logging
 - ✅ JSON log of all processed studies
 

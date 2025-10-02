@@ -28,7 +28,7 @@ class DICOMProcessingService:
 
     def __init__(self):
         self.max_zip_size = 1 * 1024 * 1024 * 1024  # 1GB
-        self.max_individual_file_size = 100 * 1024 * 1024  # 100MB
+        self.max_individual_file_size = 500 * 1024 * 1024  # 500MB (increased for large CT series)
 
     def _serialize_dicom_value(self, value: Any) -> Any:
         """Convert DICOM values to JSON-serializable formats"""
@@ -87,9 +87,16 @@ class DICOMProcessingService:
                 for file_path in dicom_files:
                     try:
                         file_data = zip_ref.read(file_path)
+                        file_size_mb = len(file_data) / (1024 * 1024)
+
                         if len(file_data) > self.max_individual_file_size:
-                            logger.warning(f"Skipping large file: {file_path}")
+                            logger.warning(
+                                f"Skipping large file: {file_path} "
+                                f"({file_size_mb:.1f}MB > {self.max_individual_file_size/(1024*1024):.0f}MB limit)"
+                            )
                             continue
+
+                        logger.debug(f"Processing DICOM file: {file_path} ({file_size_mb:.1f}MB)")
 
                         await self._process_individual_dicom(
                             file_data, file_path, study.id, user_id, session
@@ -122,12 +129,20 @@ class DICOMProcessingService:
                 continue
 
             filename = file_info.filename.lower()
-            # Check for DICOM file extensions and patterns
-            if (filename.endswith(('.dcm', '.dicom', '.dic')) or
-                'dicom' in filename or
-                self._is_dicom_file(zip_ref, file_info.filename)):
-                dicom_files.append(file_info.filename)
+            original_filename = file_info.filename
 
+            # Check for DICOM file extensions and patterns
+            has_dicom_ext = filename.endswith(('.dcm', '.dicom', '.dic'))
+            has_dicom_name = 'dicom' in filename
+            is_dicom_header = self._is_dicom_file(zip_ref, original_filename)
+
+            if has_dicom_ext or has_dicom_name or is_dicom_header:
+                logger.info(f"Found DICOM file: {original_filename} (ext={has_dicom_ext}, name={has_dicom_name}, header={is_dicom_header})")
+                dicom_files.append(original_filename)
+            else:
+                logger.debug(f"Skipped non-DICOM file: {original_filename}")
+
+        logger.info(f"Found {len(dicom_files)} DICOM files in ZIP")
         return dicom_files
 
     def _is_dicom_file(self, zip_ref: zipfile.ZipFile, filename: str) -> bool:

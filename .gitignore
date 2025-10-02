@@ -11,3 +11,4 @@ data/models/nnunet_test
 *nii.gz
 data/results/processing_log.json
 *xlsx
+TESTING_EXCEL_REPORTS.md
